@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ReviewLab — Módulo 4</title>
+  <link rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}">
+  <script defer
+          src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <div class="marca">
+        <span class="logo">&lt;/&gt;</span>
+        <strong>ReviewLab<span>.</span></strong>
+      </div>
+      <span class="etiqueta">Módulo 04 · MVP</span>
+    </header>
+
+    <section class="introducao">
+      <span class="subtitulo">CODE REVIEW & ARQUITETURA</span>
+      <h1>Uma segunda leitura do seu código.</h1>
+      <p>Encontre riscos, revise boas práticas e confira a arquitetura
+        antes do próximo merge.</p>
+    </section>
+
+    <section class="metricas">
+      <div><span>Arquivos analisados</span><strong id="total-arquivos">—</strong></div>
+      <div><span>Achados</span><strong id="total-achados">—</strong></div>
+      <div><span>Arquivos de teste detectados</span><strong id="total-testes">—</strong></div>
+    </section>
+
+    <main>
+      <section class="card">
+        <h2>Nova revisão</h2>
+        <p class="descricao">Escolha o código que vamos analisar.</p>
+
+        <label for="origem">Origem</label>
+        <select id="origem">
+          <option value="codigo">Código ou arquivos</option>
+          <option value="github">Pull Request do GitHub</option>
+        </select>
+
+        <div id="entrada-codigo">
+          <label for="caminho">Caminho do arquivo</label>
+          <input id="caminho" value="controllers/exemplo.py">
+
+          <label for="codigo">Código Python</label>
+          <textarea id="codigo" spellcheck="false"
+                    placeholder="Cole seu código aqui..."></textarea>
+
+          <div class="linha-botoes">
+            <button id="exemplo" class="secundario">Carregar exemplo</button>
+          </div>
+
+          <label for="arquivos">Ou envie arquivos .py</label>
+          <input id="arquivos" type="file" accept=".py" multiple>
+          <small>Se houver arquivos selecionados, eles serão usados
+            no lugar do código colado.</small>
+        </div>
+
+        <div id="entrada-github" hidden>
+          <label for="pr-url">Link do Pull Request</label>
+          <input id="pr-url" type="url"
+                 placeholder="https://github.com/owner/repo/pull/1">
+          <small>Até 20 arquivos alterados. Apenas Python será analisado.</small>
+        </div>
+
+        <label for="arquitetura">Arquitetura planejada</label>
+        <select id="arquitetura">
+          <option value="multicamadas">Multicamadas</option>
+          <option value="clean">Clean Architecture</option>
+        </select>
+
+        <label class="checkbox">
+          <input id="usar-ia" type="checkbox">
+          Incluir revisão do Especialista Virtual
+        </label>
+
+        <small>Ao habilitar IA, o código será enviado ao Gemini.
+          Não envie credenciais ou código confidencial sem autorização.</small>
+
+        <button id="analisar" class="principal">Analisar código</button>
+        <p id="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="card">
+        <div class="titulo-resultado">
+          <h2>Resultado da revisão</h2>
+          <select id="filtro" aria-label="Filtrar achados">
+            <option value="Todos">Todos</option>
+            <option value="Segurança">Segurança</option>
+            <option value="Code smell">Code smells</option>
+            <option value="Arquitetura">Arquitetura</option>
+            <option value="Testes">Testes</option>
+            <option value="Qualidade">Qualidade</option>
+          </select>
+        </div>
+
+        <p id="contexto" class="descricao">Aguardando uma análise.</p>
+        <div id="achados" class="vazio">Carregue o exemplo para começar.</div>
+
+        <section id="painel-ia" class="painel-ia" hidden>
+          <h3>✦ Especialista Virtual</h3>
+          <span id="ia-status" class="etiqueta"></span>
+          <pre id="ia-texto"></pre>
+        </section>
+
+        <div id="acoes" class="linha-botoes" hidden>
+          <button id="exportar" class="secundario">Exportar relatório</button>
+          <button id="previa" class="secundario" hidden>Prévia do comentário</button>
+        </div>
+
+        <small class="limite">Análise simplificada. Testes não são executados.
+          Revise os resultados antes de tomar decisões.</small>
+      </section>
+    </main>
+
+    <section class="card historico">
+      <h2>Revisões anteriores</h2>
+      <p class="descricao">Histórico salvo no banco local deste projeto.</p>
+      <div id="historico"></div>
+    </section>
+
+    <footer>Engenharia de Software · Code Review Automatizado
+      e Análise Arquitetural</footer>
+  </div>
+
+  <dialog id="modal">
+    <h2>Comentário que será publicado</h2>
+    <p id="destino" class="descricao"></p>
+    <textarea id="comentario" readonly></textarea>
+    <div class="linha-botoes">
+      <button id="publicar" class="principal">Publicar no PR</button>
+      <button id="fechar" class="secundario">Fechar</button>
+    </div>
+    <p id="status-comentario" role="status"></p>
+  </dialog>
+</body>
+</html>

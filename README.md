@@ -1,9 +1,21 @@
-# revisor-codigo-ia
-## Módulo 4: Code Review Automatizado e Análise Arquitetural
+# Revisor de Código com IA
 
-• Escopo: Execução de análise estática e revisão de código a partir dos Pull
-Requests do GitHub. Verificação de suporte a testes, code smells, segurança e
-conformidade com a arquitetura planejada.
+Microsserviço responsável pela análise automatizada de código enviado por meio de Pull Requests.
 
-• Aplicação sugerida de IA: A IA atua como um "Especialista Virtual", escrevendo
-comentários no Pull Request com sugestões de refatoração, detecção de antipadrões e avaliação da qualidade da arquitetura
+## Objetivos
+
+- identificar problemas de qualidade;
+- detectar possíveis vulnerabilidades;
+- verificar a existência de testes;
+- identificar code smells;
+- avaliar a conformidade arquitetural;
+- gerar sugestões de correção com Inteligência Artificial.
+
+## Integrantes
+
+- Sophia Betoni
+- Gi A. Dias
+
+## Status
+
+Projeto em fase inicial de desenvolvimento.
