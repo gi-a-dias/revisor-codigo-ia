@@ -39,12 +39,19 @@
     "dart.analysis.tool.window.visible": "false",
     "git-widget-placeholder": "main",
     "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.jshint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.jshint": "",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\giova\revisor-codigo-ia" />
+    </key>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -61,7 +68,7 @@
       <updated>1792347357270</updated>
       <workItem from="1792347358420" duration="2331000" />
       <workItem from="1792351064462" duration="7000" />
-      <workItem from="1792352110264" duration="137000" />
+      <workItem from="1792352110264" duration="1925000" />
     </task>
     <servers />
   </component>
