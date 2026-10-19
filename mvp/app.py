@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import requests
 from dotenv import load_dotenv
@@ -19,9 +20,18 @@ PASTA = Path(__file__).resolve().parent
 load_dotenv(PASTA / ".env")
 
 app = Flask(__name__)
+if os.getenv("WEBSITE_HOSTNAME"):
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=0,
+        x_proto=1,
+    )
 app.config["MAX_CONTENT_LENGTH"] = 500_000
 
-BANCO = PASTA / "revisoes.db"
+BANCO = Path(
+    os.getenv("DATABASE_PATH") or str(PASTA / "revisoes.db")
+)
+BANCO.parent.mkdir(parents=True, exist_ok=True)
 
 
 class ErroIntegracao(Exception):
