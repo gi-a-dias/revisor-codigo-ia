@@ -8,6 +8,7 @@ def client():
     with app.test_client() as client:
         yield client
 
+
 def test_health_check(client):
     """Testa se a API está online e retornando o status correto."""
     resposta = client.get("/api/health")
