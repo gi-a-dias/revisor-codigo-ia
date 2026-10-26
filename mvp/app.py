@@ -4,15 +4,17 @@ import os
 import re
 import sqlite3
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import requests
-from analisador import REGRAS, analisar
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
-from werkzeug.middleware.proxy_fix import ProxyFix
+
+from analisador import REGRAS, analisar
+
 
 PASTA = Path(__file__).resolve().parent
 load_dotenv(PASTA / ".env")
@@ -191,13 +193,13 @@ def validar_arquivos(arquivos):
 
     for arquivo in arquivos:
         if not isinstance(arquivo, dict):
-            raise TypeError("Arquivo inválido.")
+            raise ValueError("Arquivo inválido.")
 
         caminho = arquivo.get("caminho")
         conteudo = arquivo.get("conteudo")
 
         if not isinstance(caminho, str) or not isinstance(conteudo, str):
-            raise TypeError("Cada arquivo precisa de caminho e conteúdo.")
+            raise ValueError("Cada arquivo precisa de caminho e conteúdo.")
 
         caminho = caminho.replace("\\", "/").strip()
         arquivo["caminho"] = caminho
@@ -441,7 +443,7 @@ def revisar():
 
         relatorio.update({
             "id": str(uuid.uuid4()),
-            "criado_em": datetime.now(UTC).isoformat(),
+            "criado_em": datetime.now(timezone.utc).isoformat(),
             "arquitetura": arquitetura,
             "pr": pr,
             "ia": {
