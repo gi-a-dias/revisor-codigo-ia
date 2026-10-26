@@ -1,7 +1,6 @@
 import ast
 from pathlib import PurePosixPath
 
-
 # Regras simplificadas de dependência entre camadas.
 REGRAS = {
     "multicamadas": [

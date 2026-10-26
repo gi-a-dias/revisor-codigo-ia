@@ -4,7 +4,6 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-
 pasta = Path(__file__).resolve().parent
 load_dotenv(pasta / ".env")
 
