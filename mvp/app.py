@@ -9,12 +9,10 @@ from pathlib import Path
 from urllib.parse import quote
 
 import requests
+from analisador import REGRAS, analisar
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
-
-from analisador import REGRAS, analisar
-
 
 PASTA = Path(__file__).resolve().parent
 load_dotenv(PASTA / ".env")
