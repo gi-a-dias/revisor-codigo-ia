@@ -4,7 +4,7 @@ import os
 import re
 import sqlite3
 import uuid
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
 
