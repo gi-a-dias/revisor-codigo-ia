@@ -4,15 +4,17 @@ import os
 import re
 import sqlite3
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
 import requests
-from analisador import REGRAS, analisar
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+from analisador import REGRAS, analisar
+
 
 PASTA = Path(__file__).resolve().parent
 load_dotenv(PASTA / ".env")
@@ -388,7 +390,6 @@ def gerar_markdown(relatorio):
 
 @app.before_request
 def verificar_origem():
-    # Impede solicitações do navegador originadas de outro site.
     if request.method == "POST":
         origem = request.headers.get("Origin")
 
