@@ -31,6 +31,42 @@ REGRAS = {
             "motivo": "Casos de uso não devem depender da apresentação.",
         },
     ],
+    "mvc": [
+        {
+            "origem": "models/",
+            "proibidos": ["controllers", "views"],
+            "motivo": "Models devem ser independentes de controllers e views.",
+        },
+        {
+            "origem": "views/",
+            "proibidos": ["sqlite3", "psycopg2"],
+            "motivo": "Views devem cuidar da apresentação sem acessar o banco diretamente.",
+        },
+    ],
+    "hexagonal": [
+        {
+            "origem": "domain/",
+            "proibidos": ["adapters", "infrastructure", "flask", "fastapi", "sqlite3"],
+            "motivo": "O domínio deve ser independente de adaptadores e infraestrutura.",
+        },
+        {
+            "origem": "ports/",
+            "proibidos": ["adapters", "infrastructure"],
+            "motivo": "Portas definem contratos e devem ser independentes de implementações.",
+        },
+    ],
+    "onion": [
+        {
+            "origem": "domain/",
+            "proibidos": ["application", "infrastructure", "presentation", "controllers"],
+            "motivo": "O domínio deve ser independente das camadas externas.",
+        },
+        {
+            "origem": "application/",
+            "proibidos": ["infrastructure", "presentation", "controllers"],
+            "motivo": "A camada de aplicação deve depender do domínio e de abstrações.",
+        },
+    ],
 }
 
 
@@ -52,12 +88,13 @@ def analisar(arquivos, arquitetura):
     for arquivo in arquivos:
         caminho = arquivo["caminho"]
         codigo = arquivo["conteudo"]
-        nome = PurePosixPath(caminho).name
+        caminho_python = PurePosixPath(caminho)
+        nome = caminho_python.name
 
         if (
             nome.startswith("test_")
             or nome.endswith("_test.py")
-            or "tests" in PurePosixPath(caminho).parts
+            or "tests" in caminho_python.parts[:-1]
         ):
             testes.append(caminho)
 
@@ -163,16 +200,17 @@ def analisar(arquivos, arquitetura):
                 modulos = [item.name for item in no.names]
 
             elif isinstance(no, ast.ImportFrom):
-                modulos = [no.module or ""]
+                modulos = [no.module] if no.module else [
+                    item.name for item in no.names
+                ]
 
             for regra in REGRAS[arquitetura]:
-                if not caminho.startswith(regra["origem"]):
+                if regra["origem"].rstrip("/") not in caminho_python.parts[:-1]:
                     continue
 
                 for modulo in modulos:
                     if any(
-                        modulo == proibido
-                        or modulo.startswith(proibido + ".")
+                        proibido in modulo.split(".")
                         for proibido in regra["proibidos"]
                     ):
                         adicionar(

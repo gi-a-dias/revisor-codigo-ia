@@ -1,6 +1,7 @@
 const elemento = (id) => document.getElementById(id);
 
 let revisaoAtual = null;
+const revisoesPublicadas = new Set();
 
 const exemplo = `from repositories.usuario_repository import salvar
 
@@ -30,10 +31,14 @@ async function api(url, dados) {
     ...(dados ? { body: JSON.stringify(dados) } : {}),
   });
 
-  const resultado = await resposta.json();
+  const resultado = await resposta.json().catch(() => null);
 
   if (!resposta.ok) {
-    throw new Error(resultado.erro || "Não foi possível concluir.");
+    throw new Error(resultado?.erro || `Não foi possível concluir (HTTP ${resposta.status}).`);
+  }
+
+  if (resultado === null) {
+    throw new Error("O servidor retornou uma resposta inválida.");
   }
 
   return resultado;
@@ -46,7 +51,6 @@ elemento("origem").addEventListener("change", () => {
 });
 
 elemento("exemplo").addEventListener("click", () => {
-  elemento("caminho").value = "controllers/exemplo.py";
   elemento("codigo").value = exemplo;
   elemento("arquivos").value = "";
 });
@@ -134,13 +138,17 @@ elemento("analisar").addEventListener("click", async () => {
       const selecionados = Array.from(elemento("arquivos").files);
 
       if (selecionados.length) {
+        if (selecionados.length > 20) {
+          throw new Error("Selecione até 20 arquivos Python.");
+        }
+
+        if (selecionados.reduce((total, arquivo) => total + arquivo.size, 0) > 100000) {
+          throw new Error("Os arquivos juntos excedem o limite de 100 KB.");
+        }
+
         dados.arquivos = [];
 
         for (const arquivo of selecionados) {
-          if (arquivo.size > 100000) {
-            throw new Error("Um arquivo excede o limite de 100 KB.");
-          }
-
           dados.arquivos.push({
             caminho: arquivo.name,
             conteudo: await arquivo.text(),
@@ -152,7 +160,7 @@ elemento("analisar").addEventListener("click", async () => {
         }
 
         dados.arquivos = [{
-          caminho: elemento("caminho").value.trim(),
+          caminho: "trecho.py",
           conteudo: elemento("codigo").value,
         }];
       }
@@ -164,7 +172,6 @@ elemento("analisar").addEventListener("click", async () => {
     mostrarRevisao(revisao);
     elemento("status").textContent = "Análise concluída.";
     await carregarHistorico();
-
   } catch (erro) {
     elemento("status").textContent = erro.message;
   } finally {
@@ -233,7 +240,12 @@ elemento("previa").addEventListener("click", () => {
   elemento("destino").textContent = revisaoAtual.pr.url;
   elemento("comentario").value = revisaoAtual.markdown;
   elemento("status-comentario").textContent = "";
+  elemento("publicar").disabled = revisoesPublicadas.has(revisaoAtual.id);
   elemento("modal").showModal();
+});
+
+elemento("modal").addEventListener("cancel", (evento) => {
+  if (elemento("fechar").disabled) evento.preventDefault();
 });
 
 elemento("fechar").addEventListener("click", () => {
@@ -245,16 +257,20 @@ elemento("publicar").addEventListener("click", async () => {
 
   const botao = elemento("publicar");
   botao.disabled = true;
+  elemento("fechar").disabled = true;
   elemento("status-comentario").textContent = "Publicando…";
 
   try {
-    await api(`/api/revisoes/${revisaoAtual.id}/comentar`, {});
+    const id = revisaoAtual.id;
+    await api(`/api/revisoes/${id}/comentar`, {});
+    revisoesPublicadas.add(id);
     elemento("status-comentario").textContent =
       "Comentário publicado no Pull Request.";
   } catch (erro) {
     elemento("status-comentario").textContent = erro.message;
-  } finally {
     botao.disabled = false;
+  } finally {
+    elemento("fechar").disabled = false;
   }
 });
 

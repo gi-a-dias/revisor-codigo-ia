@@ -2,12 +2,12 @@
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 # More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
 
-name: Build and deploy Python app to Azure Web App - revisor-codigo-ia
+name: Build and deploy Python app to Azure Web App - mvp-revisor-codigo-sophiaa
 
 on:
   push:
     branches:
-      - 'main'
+      - 'feature/mvp-modulo4'
   workflow_dispatch:
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
       - name: Set up Python version
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.12'
 
       # 🛠️ Local Build Section (Optional)
       # The following section in your workflow is designed to catch build issues early on the client side, before deployment. This can be helpful for debugging and validation. However, if this step significantly increases deployment time and early detection is not critical for your workflow, you may remove this section to streamline the deployment process.
@@ -50,27 +50,17 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
+    
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: python-app
       
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_179DEE1407D24C6B82D63C5A1EF77F72 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_92AE2EFA8AF641D7B65CD33ACE5E28B6 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_99C43A8F77DB4C51B5BC880034B7F9AA }}
-
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
-          app-name: 'revisor-codigo-ia'
+          app-name: 'mvp-revisor-codigo-sophiaa'
           slot-name: 'Production'
-          
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_4C4E9CCD4E244955BD9E273805013B71 }}
