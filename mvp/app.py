@@ -201,7 +201,6 @@ def verificar_acesso():
 
 @app.before_request
 def verificar_origem():
-    # Impede solicitações do navegador originadas de outro site.
     if request.method == "POST":
         origem = request.headers.get("Origin")
 
