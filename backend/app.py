@@ -8,12 +8,13 @@ import uuid
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from analisador import REGRAS, analisar
 from gemini import consultar_ia
@@ -24,6 +25,10 @@ PASTA = Path(__file__).resolve().parent
 load_dotenv(PASTA / ".env")
 
 LIMITE_CORPO = 500_000
+
+# Opcional: com SERVIR_FRONTEND=1 a própria API entrega a pasta frontend/,
+# o que permite publicar tudo num único App Service. Desligado por padrão.
+FRONTEND = (PASTA.parent / "frontend").resolve()
 
 # Origens do front-end autorizadas a chamar esta API (separadas por vírgula).
 ORIGENS_PERMITIDAS = [
@@ -41,6 +46,23 @@ BANCO = Path(
     os.getenv("DATABASE_PATH") or str(PASTA / "revisoes.db")
 )
 BANCO.parent.mkdir(parents=True, exist_ok=True)
+
+
+def servindo_frontend():
+    return os.getenv("SERVIR_FRONTEND", "").strip().lower() in {"1", "true", "sim", "yes"}
+
+
+def arquivo_frontend(caminho):
+    """Resolve um arquivo dentro de frontend/ (nunca fora dela)."""
+    alvo = (FRONTEND / (caminho or "index.html")).resolve()
+
+    if alvo.is_dir():
+        alvo = alvo / "index.html"
+
+    if alvo.is_relative_to(FRONTEND) and alvo.is_file():
+        return alvo
+
+    return None
 
 
 def erro(mensagem, status, headers=None):
@@ -202,11 +224,28 @@ def credenciais_basic(request):
 # WWW-Authenticate é enviado, para o navegador pedir a senha. Nas chamadas
 # do front-end (outra origem) quem pede a senha é a própria tela.
 ROTAS_NAVEGADOR = {"/", "/docs", "/redoc", "/openapi.json"}
+ROTAS_DOCUMENTACAO = {"/docs", "/redoc", "/openapi.json"}
+
+
+def rota_publica(request):
+    caminho = request.url.path
+
+    if caminho == "/api/health":
+        return True
+
+    # A página e seus arquivos precisam abrir sem senha para a tela de login
+    # aparecer; a API continua protegida.
+    return (
+        servindo_frontend()
+        and request.method == "GET"
+        and not caminho.startswith("/api")
+        and caminho not in ROTAS_DOCUMENTACAO
+    )
 
 
 @app.middleware("http")
 async def verificar_acesso(request: Request, call_next):
-    if request.method == "OPTIONS" or request.url.path == "/api/health":
+    if request.method == "OPTIONS" or rota_publica(request):
         return await call_next(request)
 
     senha = os.getenv("REVIEW_ACCESS_KEY", "").strip()
@@ -237,13 +276,15 @@ async def verificar_acesso(request: Request, call_next):
 @app.middleware("http")
 async def verificar_origem(request: Request, call_next):
     # Impede solicitações do navegador originadas de sites não autorizados.
+    # Vale a origem do próprio serviço (comparada pelo host, que não muda atrás
+    # de proxy) ou uma das listadas em CORS_ORIGINS.
     if request.method == "POST":
         origem = request.headers.get("origin")
 
         if (
             origem
             and origem.rstrip("/") not in ORIGENS_PERMITIDAS
-            and origem.rstrip("/") != str(request.base_url).rstrip("/")
+            and urlparse(origem).netloc != request.headers.get("host", "")
         ):
             return erro("Origem da solicitação inválida.", 403)
 
@@ -283,6 +324,9 @@ async def ler_json(request):
 
 @app.get("/")
 def inicio():
+    if servindo_frontend():
+        return FileResponse(FRONTEND / "index.html")
+
     return {
         "servico": "Revisor de Código com IA",
         "modulo": 4,
@@ -434,6 +478,18 @@ def comentar(identificador: str):
 
     except ErroIntegracao as falha:
         return erro(str(falha), 502)
+
+
+# Deve ser a última rota: só atende o que nenhuma rota da API reconheceu.
+@app.get("/{caminho:path}", include_in_schema=False)
+def arquivos_do_frontend(caminho: str):
+    if servindo_frontend():
+        arquivo = arquivo_frontend(caminho)
+
+        if arquivo:
+            return FileResponse(arquivo)
+
+    return erro("Não encontrado.", 404)
 
 
 if __name__ == "__main__":

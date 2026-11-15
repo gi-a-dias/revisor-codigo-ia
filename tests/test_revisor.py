@@ -225,3 +225,42 @@ class RevisorTest(unittest.TestCase):
         )
         self.assertEqual(resposta.status_code, 400)
         self.assertIn("erro", resposta.json())
+
+    def test_frontend_desligado_por_padrao(self):
+        self.assertEqual(self.cliente.get("/script.js").status_code, 404)
+        self.assertEqual(self.cliente.get("/").json()["modulo"], 4)
+
+    @patch.dict(os.environ, {"SERVIR_FRONTEND": "1", "REVIEW_ACCESS_KEY": "senha"})
+    def test_frontend_servido_abre_sem_senha_mas_api_continua_protegida(self):
+        pagina = self.cliente.get("/")
+        self.assertEqual(pagina.status_code, 200)
+        self.assertIn("text/html", pagina.headers["content-type"])
+        self.assertIn("ReviewLab", pagina.text)
+
+        for arquivo in ("/script.js", "/style.css", "/tokens.css", "/config.js"):
+            self.assertEqual(self.cliente.get(arquivo).status_code, 200, arquivo)
+
+        self.assertEqual(self.cliente.get("/api/historico").status_code, 401)
+        self.assertEqual(self.cliente.get("/docs").status_code, 401)
+        self.assertEqual(
+            self.cliente.post("/api/analisar", json={}).status_code, 401
+        )
+
+    @patch.dict(os.environ, {"SERVIR_FRONTEND": "1"})
+    def test_frontend_nao_entrega_arquivos_fora_da_pasta(self):
+        for caminho in (
+            "/backend/app.py",
+            "/../backend/app.py",
+            "/%2e%2e/backend/app.py",
+            "/..%2fbackend%2fapp.py",
+        ):
+            resposta = self.cliente.get(caminho)
+            self.assertEqual(resposta.status_code, 404, caminho)
+            self.assertNotIn("FastAPI", resposta.text)
+
+    def test_post_da_propria_origem_e_aceito(self):
+        corpo = {"arquivos": [{"caminho": "a.py", "conteudo": "x = 1"}]}
+        resposta = self.cliente.post(
+            "/api/analisar", json=corpo, headers={"Origin": "http://testserver"}
+        )
+        self.assertEqual(resposta.status_code, 201)

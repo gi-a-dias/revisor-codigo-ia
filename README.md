@@ -64,6 +64,7 @@ e adicione apenas as variáveis que faltam.
   Pull requests e de leitura em Contents nos repositórios analisados.
   Configure também `REVIEW_ACCESS_KEY` com uma senha forte. A tela do front
   pede o usuário `revisor` e essa senha. Com token GitHub, a senha é obrigatória.
+- `SERVIR_FRONTEND=1` faz a API entregar também a interface (veja Publicação).
 - `CORS_ORIGINS` lista os endereços do front-end autorizados a chamar a API
   (separados por vírgula). Em produção, use a URL onde o front estiver hospedado.
 
@@ -79,10 +80,26 @@ python -m uvicorn --app-dir backend app:app --host 0.0.0.0 --port 8000 --proxy-h
 Use `DATABASE_PATH` em um diretório persistente se precisar preservar o
 histórico entre implantações.
 
-**Front-end.** Hospede a pasta `frontend/` em qualquer serviço de arquivos
-estáticos (Azure Static Web Apps, GitHub Pages etc.) depois de trocar `API_URL`
-em `frontend/config.js` pela URL pública do back-end. Inclua a URL do front em
-`CORS_ORIGINS`.
+**Front-end.** Há duas opções:
+
+1. **Um deploy só (recomendado):** nas configurações do App Service, crie a
+   variável `SERVIR_FRONTEND` com o valor `1`. A própria API passa a entregar a
+   pasta `frontend/`, e o endereço do App Service abre a interface. A página
+   abre sem senha (para mostrar a tela de login) e a API continua protegida.
+   Nesse caso o `config.js` não precisa de ajuste.
+2. **Front hospedado à parte:** publique `frontend/` em um serviço de arquivos
+   estáticos (Azure Static Web Apps, GitHub Pages etc.), troque `API_URL` em
+   `frontend/config.js` pela URL pública da API e inclua a URL do front em
+   `CORS_ORIGINS`.
+
+Para testar a opção 1 localmente, sem o segundo terminal:
+
+```powershell
+$env:SERVIR_FRONTEND = "1"
+.\.venv\Scripts\python.exe backend/app.py
+```
+
+Abra http://127.0.0.1:5000.
 
 ## Limites e regras
 
