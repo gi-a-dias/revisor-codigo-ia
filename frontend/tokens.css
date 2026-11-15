@@ -1,0 +1,54 @@
+/* tokens.css — Guia de Identidade Visual do Módulo 6 (v1.0, outubro/2026).
+   Valores copiados do guia da turma. Não use hex direto nos componentes:
+   referencie sempre var(--token). */
+:root {
+  /* Marca */
+  --color-primary: #1E2A5A;
+  --color-primary-hover: #2F3F7F;
+  --color-brand-accent: #C8102E; /* só logo e detalhes de marca */
+
+  /* Neutros (claro) */
+  --color-bg: #F6F7FA;
+  --color-surface: #FFFFFF;
+  --color-border: #E2E5EC;
+  --color-text: #1A1D29;
+  --color-text-muted: #5B6275;
+
+  /* Prioridade */
+  --color-priority-critical: #DC2626;
+  --color-priority-high: #EA580C;
+  --color-priority-medium: #B45309;
+  --color-priority-low: #64748B;
+  --color-success: #16A34A;
+
+  /* Gráficos */
+  --chart-1: #3B5BDB; --chart-2: #0EA5A4; --chart-3: #8B5CF6;
+  --chart-4: #F59E0B; --chart-5: #EC4899;
+
+  /* Tipografia */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --text-xs: 12px; --text-sm: 14px; --text-md: 16px;
+  --text-lg: 20px; --text-xl: 24px; --text-2xl: 32px;
+
+  /* Extras deste módulo (não fazem parte do guia) */
+  --color-on-primary: #FFFFFF;           /* texto sobre botões azul-marinho e selos */
+  --color-focus: var(--color-primary-hover); /* anel de foco e controles marcados */
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --color-bg: #0F1220;
+  --color-surface: #181C2E;
+  --color-border: #2A2F45;
+  --color-text: #E8EAF2;
+  --color-text-muted: #9AA0B4;
+
+  /* O azul-marinho some no fundo escuro: o foco usa uma versão clara. */
+  --color-focus: #8EA2F5;
+
+  color-scheme: dark;
+}
+
+.metric { font-variant-numeric: tabular-nums; }

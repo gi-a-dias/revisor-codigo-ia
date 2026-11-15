@@ -4,10 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ReviewLab — Módulo 4</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet"
-        href="{{ url_for('static', filename='style.css') }}">
-  <script defer
-          src="{{ url_for('static', filename='script.js') }}"></script>
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="tema.js"></script>
+  <script src="config.js"></script>
+  <script defer src="script.js"></script>
 </head>
 
 <body>
@@ -17,7 +22,10 @@
         <span class="logo">&lt;/&gt;</span>
         <strong>ReviewLab<span>.</span></strong>
       </div>
-      <span class="etiqueta">Módulo 04 · MVP</span>
+      <div class="cabecalho-direita">
+        <span class="etiqueta">Módulo 04 · MVP</span>
+        <button id="tema" class="secundario" type="button" aria-pressed="false">☾ Modo escuro</button>
+      </div>
     </header>
 
     <section class="introducao">
@@ -106,7 +114,7 @@
         <div id="achados" class="vazio">Carregue o exemplo para começar.</div>
 
         <section id="painel-ia" class="painel-ia" hidden>
-          <h3>✦ Especialista Virtual</h3>
+          <h3><span aria-hidden="true">✦</span> Especialista Virtual</h3>
           <span id="ia-status" class="etiqueta"></span>
           <pre id="ia-texto"></pre>
         </section>
@@ -123,13 +131,27 @@
 
     <section class="card historico">
       <h2>Revisões anteriores</h2>
-      <p class="descricao">Histórico salvo no banco local deste projeto.</p>
+      <p class="descricao">Histórico salvo pelo serviço de revisão.</p>
       <div id="historico"></div>
     </section>
 
     <footer>Engenharia de Software · Code Review Automatizado
       e Análise Arquitetural</footer>
   </div>
+
+  <dialog id="login">
+    <h2>Acesso restrito</h2>
+    <p class="descricao">Informe o usuário e a senha do revisor.</p>
+    <label for="login-usuario">Usuário</label>
+    <input id="login-usuario" type="text" value="revisor" autocomplete="username">
+    <label for="login-senha">Senha</label>
+    <input id="login-senha" type="password" autocomplete="current-password">
+    <div class="linha-botoes">
+      <button id="login-entrar" class="principal">Entrar</button>
+      <button id="login-cancelar" class="secundario">Cancelar</button>
+    </div>
+    <p id="login-status" role="status"></p>
+  </dialog>
 
   <dialog id="modal">
     <h2>Comentário que será publicado</h2>

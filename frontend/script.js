@@ -24,12 +24,88 @@ function escapar(texto) {
   return div.innerHTML;
 }
 
-async function api(url, dados) {
-  const resposta = await fetch(url, {
-    method: dados ? "POST" : "GET",
-    headers: { "Content-Type": "application/json" },
-    ...(dados ? { body: JSON.stringify(dados) } : {}),
+const API_URL = (window.API_URL || "").replace(/\/+$/, "");
+
+// Credenciais ficam só na sessão da aba (some ao fechar o navegador).
+let credenciais = sessionStorage.getItem("credenciais");
+
+function codificarCredenciais(usuario, senha) {
+  const bytes = new TextEncoder().encode(`${usuario}:${senha}`);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+// Abre a tela de login e devolve uma promessa com as credenciais digitadas.
+function pedirLogin(mensagem = "") {
+  return new Promise((resolver, rejeitar) => {
+    const dialogo = elemento("login");
+    const entrar = elemento("login-entrar");
+    const cancelar = elemento("login-cancelar");
+    const senha = elemento("login-senha");
+
+    elemento("login-status").textContent = mensagem;
+    senha.value = "";
+
+    const limpar = () => {
+      entrar.removeEventListener("click", aoEntrar);
+      cancelar.removeEventListener("click", aoCancelar);
+      dialogo.removeEventListener("cancel", aoCancelar);
+      dialogo.close();
+    };
+
+    const aoEntrar = () => {
+      if (!senha.value) {
+        elemento("login-status").textContent = "Informe a senha.";
+        return;
+      }
+      const valor = codificarCredenciais(elemento("login-usuario").value.trim(), senha.value);
+      limpar();
+      resolver(valor);
+    };
+
+    const aoCancelar = () => {
+      limpar();
+      rejeitar(new Error("Login necessário para usar o serviço."));
+    };
+
+    entrar.addEventListener("click", aoEntrar);
+    cancelar.addEventListener("click", aoCancelar);
+    dialogo.addEventListener("cancel", aoCancelar);
+    dialogo.showModal();
+    senha.focus();
   });
+}
+
+async function requisitar(url, dados) {
+  const headers = { "Content-Type": "application/json" };
+  if (credenciais) headers.Authorization = `Basic ${credenciais}`;
+
+  try {
+    return await fetch(API_URL + url, {
+      method: dados ? "POST" : "GET",
+      headers,
+      ...(dados ? { body: JSON.stringify(dados) } : {}),
+    });
+  } catch {
+    throw new Error(
+      "Não foi possível conectar ao serviço de revisão. " +
+      "Confira se o back-end está no ar e o endereço em config.js."
+    );
+  }
+}
+
+async function api(url, dados) {
+  let resposta = await requisitar(url, dados);
+
+  // 401: pede usuário e senha (de novo, se a senha anterior falhou) e repete.
+  while (resposta.status === 401) {
+    const falhou = Boolean(credenciais);
+    credenciais = null;
+    sessionStorage.removeItem("credenciais");
+
+    credenciais = await pedirLogin(falhou ? "Usuário ou senha incorretos." : "");
+    sessionStorage.setItem("credenciais", credenciais);
+    resposta = await requisitar(url, dados);
+  }
 
   const resultado = await resposta.json().catch(() => null);
 
@@ -55,6 +131,25 @@ elemento("exemplo").addEventListener("click", () => {
   elemento("arquivos").value = "";
 });
 
+// Guia do Módulo 6: a cor indica a prioridade; o ícone e o rótulo indicam a origem.
+// Falha de segurança grave é "Crítica"; as demais seguem a gravidade da análise.
+const ORIGENS = {
+  "Segurança": { icone: "⚠" },
+  "Code smell": { icone: "☰" },
+  "Arquitetura": { icone: "◫" },
+  "Testes": { icone: "✓" },
+  "Qualidade": { icone: "◆" },
+};
+
+function nivelDeprioridade(item) {
+  if (item.categoria === "Segurança" && item.gravidade === "Alta") {
+    return { classe: "critical", rotulo: "Crítica" };
+  }
+  if (item.gravidade === "Alta") return { classe: "high", rotulo: "Alta" };
+  if (item.gravidade === "Média") return { classe: "medium", rotulo: "Média" };
+  return { classe: "low", rotulo: "Baixa" };
+}
+
 function mostrarAchados() {
   if (!revisaoAtual) return;
 
@@ -73,21 +168,24 @@ function mostrarAchados() {
     return;
   }
 
-  const classes = { Alta: "alta", Média: "media", Baixa: "baixa" };
+  elemento("achados").innerHTML = achados.map((item) => {
+    const nivel = nivelDeprioridade(item);
+    const origem = ORIGENS[item.categoria] || { icone: "•" };
 
-  elemento("achados").innerHTML = achados.map((item) => `
-    <article class="achado">
-      <span class="gravidade ${classes[item.gravidade]}">
-        ${escapar(item.gravidade)} · ${escapar(item.categoria)}
-      </span>
+    return `
+    <article class="achado ${nivel.classe}">
+      <div class="achado-topo">
+        <span class="selo">${nivel.rotulo}</span>
+        <span class="origem"><span aria-hidden="true">${origem.icone}</span> ${escapar(item.categoria)}</span>
+      </div>
       <h3>${escapar(item.titulo)}</h3>
       <div class="local">
-        ${escapar(item.arquivo)}
-        ${item.linha ? ":" + escapar(item.linha) : ""}
+        ${escapar(item.arquivo)}${item.linha ? ":" + escapar(item.linha) : ""}
       </div>
       <p class="sugestao">${escapar(item.sugestao)}</p>
     </article>
-  `).join("");
+  `;
+  }).join("");
 }
 
 function mostrarRevisao(revisao) {

@@ -1,3 +1,5 @@
+import base64
+import binascii
 import hmac
 import json
 import os
@@ -8,8 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
-from werkzeug.middleware.proxy_fix import ProxyFix
+from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from analisador import REGRAS, analisar
 from gemini import consultar_ia
@@ -19,19 +23,28 @@ from github_pr import ErroIntegracao, carregar_pr, obter_sha, publicar_revisao
 PASTA = Path(__file__).resolve().parent
 load_dotenv(PASTA / ".env")
 
-app = Flask(__name__)
-if os.getenv("WEBSITE_HOSTNAME"):
-    app.wsgi_app = ProxyFix(
-        app.wsgi_app,
-        x_for=0,
-        x_proto=1,
-    )
-app.config["MAX_CONTENT_LENGTH"] = 500_000
+LIMITE_CORPO = 500_000
+
+# Origens do front-end autorizadas a chamar esta API (separadas por vírgula).
+ORIGENS_PERMITIDAS = [
+    origem.strip().rstrip("/")
+    for origem in (
+        os.getenv("CORS_ORIGINS")
+        or "http://127.0.0.1:3000,http://localhost:3000"
+    ).split(",")
+    if origem.strip()
+]
+
+app = FastAPI(title="Revisor de Código com IA — Módulo 4", version="1.0")
 
 BANCO = Path(
     os.getenv("DATABASE_PATH") or str(PASTA / "revisoes.db")
 )
 BANCO.parent.mkdir(parents=True, exist_ok=True)
+
+
+def erro(mensagem, status, headers=None):
+    return JSONResponse({"erro": mensagem}, status_code=status, headers=headers)
 
 
 def conectar():
@@ -168,54 +181,118 @@ def gerar_markdown(relatorio):
     return "\n".join(linhas)
 
 
-@app.before_request
-def verificar_acesso():
-    if request.endpoint == "health":
-        return
+def credenciais_basic(request):
+    """Extrai usuário e senha do cabeçalho Authorization: Basic."""
+    cabecalho = request.headers.get("authorization", "")
+    esquema, _, valor = cabecalho.partition(" ")
+
+    if esquema.lower() != "basic" or not valor:
+        return None
+
+    try:
+        decodificado = base64.b64decode(valor.strip(), validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return None
+
+    usuario, separador, senha = decodificado.partition(":")
+    return (usuario, senha) if separador else None
+
+
+# Rotas abertas direto no navegador (documentação). Só nelas o cabeçalho
+# WWW-Authenticate é enviado, para o navegador pedir a senha. Nas chamadas
+# do front-end (outra origem) quem pede a senha é a própria tela.
+ROTAS_NAVEGADOR = {"/", "/docs", "/redoc", "/openapi.json"}
+
+
+@app.middleware("http")
+async def verificar_acesso(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path == "/api/health":
+        return await call_next(request)
 
     senha = os.getenv("REVIEW_ACCESS_KEY", "").strip()
     if not senha:
         if os.getenv("GITHUB_TOKEN", "").strip():
-            return jsonify({
-                "erro": "Configure REVIEW_ACCESS_KEY para usar GITHUB_TOKEN."
-            }), 503
-        return
+            return erro("Configure REVIEW_ACCESS_KEY para usar GITHUB_TOKEN.", 503)
+        return await call_next(request)
 
-    credenciais = request.authorization
+    credenciais = credenciais_basic(request)
     if (
         credenciais
-        and credenciais.type == "basic"
-        and credenciais.username == "revisor"
+        and credenciais[0] == "revisor"
         and hmac.compare_digest(
-            (credenciais.password or "").encode("utf-8"), senha.encode("utf-8")
+            credenciais[1].encode("utf-8"), senha.encode("utf-8")
         )
     ):
-        return
+        return await call_next(request)
 
-    return (
-        jsonify({"erro": "Acesso restrito ao revisor."}),
-        401,
-        {"WWW-Authenticate": 'Basic realm="Revisor de Codigo", charset="UTF-8"'},
-    )
+    headers = None
+    if request.url.path in ROTAS_NAVEGADOR:
+        headers = {
+            "WWW-Authenticate": 'Basic realm="Revisor de Codigo", charset="UTF-8"'
+        }
+
+    return erro("Acesso restrito ao revisor.", 401, headers)
 
 
-@app.before_request
-def verificar_origem():
+@app.middleware("http")
+async def verificar_origem(request: Request, call_next):
+    # Impede solicitações do navegador originadas de sites não autorizados.
     if request.method == "POST":
-        origem = request.headers.get("Origin")
+        origem = request.headers.get("origin")
 
-        if origem and origem != request.host_url.rstrip("/"):
-            return jsonify({"erro": "Origem da solicitação inválida."}), 403
+        if (
+            origem
+            and origem.rstrip("/") not in ORIGENS_PERMITIDAS
+            and origem.rstrip("/") != str(request.base_url).rstrip("/")
+        ):
+            return erro("Origem da solicitação inválida.", 403)
+
+    return await call_next(request)
+
+
+# Adicionado por último para ficar na camada mais externa: assim até as
+# respostas de erro (401, 403, 413) levam os cabeçalhos CORS.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ORIGENS_PERMITIDAS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
+)
+
+
+async def ler_json(request):
+    """Lê o corpo JSON respeitando o limite de tamanho. Retorna (dados, resposta_de_erro)."""
+    declarado = request.headers.get("content-length")
+
+    if declarado and declarado.isdigit() and int(declarado) > LIMITE_CORPO:
+        return None, erro("Solicitação maior que o limite permitido.", 413)
+
+    corpo = bytearray()
+    async for pedaco in request.stream():
+        corpo.extend(pedaco)
+
+        if len(corpo) > LIMITE_CORPO:
+            return None, erro("Solicitação maior que o limite permitido.", 413)
+
+    try:
+        return json.loads(bytes(corpo)), None
+    except ValueError:
+        return None, None
 
 
 @app.get("/")
 def inicio():
-    return render_template("index.html")
+    return {
+        "servico": "Revisor de Código com IA",
+        "modulo": 4,
+        "documentacao": "/docs",
+    }
 
 
 @app.get("/api/health")
 def health():
-    return jsonify({"status": "ok", "modulo": 4})
+    return {"status": "ok", "modulo": 4}
 
 
 @app.get("/api/historico")
@@ -226,20 +303,14 @@ def historico():
             "ORDER BY criado_em DESC LIMIT 20"
         ).fetchall()
 
-    return jsonify([json.loads(linha["relatorio"]) for linha in linhas])
+    return [json.loads(linha["relatorio"]) for linha in linhas]
 
 
-@app.post("/api/analisar")
-def revisar():
-    dados = request.get_json(silent=True)
-
-    if not isinstance(dados, dict):
-        return jsonify({"erro": "Envie um objeto JSON válido."}), 400
-
+def processar_analise(dados):
     arquitetura = dados.get("arquitetura", "multicamadas")
 
     if not isinstance(arquitetura, str) or arquitetura not in REGRAS:
-        return jsonify({"erro": "Arquitetura inválida."}), 400
+        return erro("Arquitetura inválida.", 400)
 
     try:
         pr = None
@@ -270,30 +341,44 @@ def revisar():
         relatorio["markdown"] = gerar_markdown(relatorio)
         salvar(relatorio)
 
-        return jsonify(relatorio), 201
+        return JSONResponse(relatorio, status_code=201)
 
     except UnicodeEncodeError:
-        return jsonify({"erro": "O código ou caminho contém Unicode inválido."}), 400
+        return erro("O código ou caminho contém Unicode inválido.", 400)
 
-    except ValueError as erro:
-        return jsonify({"erro": str(erro)}), 400
+    except ValueError as falha:
+        return erro(str(falha), 400)
 
-    except ErroIntegracao as erro:
-        return jsonify({"erro": str(erro)}), 502
+    except ErroIntegracao as falha:
+        return erro(str(falha), 502)
 
 
-@app.post("/api/revisoes/<identificador>/comentar")
-def comentar(identificador):
+@app.post("/api/analisar")
+async def revisar(request: Request):
+    dados, resposta = await ler_json(request)
+
+    if resposta:
+        return resposta
+
+    if not isinstance(dados, dict):
+        return erro("Envie um objeto JSON válido.", 400)
+
+    # A análise usa rede e banco (bloqueantes), então roda fora do loop async.
+    return await run_in_threadpool(processar_analise, dados)
+
+
+@app.post("/api/revisoes/{identificador}/comentar")
+def comentar(identificador: str):
     relatorio = buscar(identificador)
 
     if not relatorio:
-        return jsonify({"erro": "Revisão não encontrada."}), 404
+        return erro("Revisão não encontrada.", 404)
 
     if not relatorio["pr"]:
-        return jsonify({"erro": "Esta revisão não veio de um PR."}), 400
+        return erro("Esta revisão não veio de um PR.", 400)
 
     if not os.getenv("GITHUB_TOKEN", "").strip():
-        return jsonify({"erro": "Configure GITHUB_TOKEN no .env."}), 503
+        return erro("Configure GITHUB_TOKEN no .env.", 503)
 
     pr = relatorio["pr"]
 
@@ -301,9 +386,7 @@ def comentar(identificador):
         texto = relatorio["markdown"]
 
         if len(texto) > 15000:
-            return jsonify({
-                "erro": "Relatório muito grande. Exporte e publique manualmente."
-            }), 400
+            return erro("Relatório muito grande. Exporte e publique manualmente.", 400)
 
         with closing(conectar()) as conexao:
             anterior = conexao.execute(
@@ -313,15 +396,11 @@ def comentar(identificador):
 
         if anterior:
             if anterior["url"]:
-                return jsonify({"url": anterior["url"]})
-            return jsonify({
-                "erro": "Publicação em andamento ou sem confirmação. Confira o PR."
-            }), 409
+                return {"url": anterior["url"]}
+            return erro("Publicação em andamento ou sem confirmação. Confira o PR.", 409)
 
         if obter_sha(pr) != pr["sha"]:
-            return jsonify({
-                "erro": "O PR mudou. Faça uma nova análise antes de comentar."
-            }), 409
+            return erro("O PR mudou. Faça uma nova análise antes de comentar.", 409)
 
         with closing(conectar()) as conexao, conexao:
             reserva = conexao.execute(
@@ -329,12 +408,12 @@ def comentar(identificador):
                 (identificador,),
             )
             if not reserva.rowcount:
-                return jsonify({"erro": "Publicação já solicitada. Confira o PR."}), 409
+                return erro("Publicação já solicitada. Confira o PR.", 409)
 
         try:
             url = publicar_revisao(pr, texto)
-        except ErroIntegracao as erro:
-            if erro.rejeitado:
+        except ErroIntegracao as falha:
+            if falha.rejeitado:
                 with closing(conectar()) as conexao, conexao:
                     conexao.execute(
                         "DELETE FROM publicacoes WHERE revisao_id = ?",
@@ -343,7 +422,7 @@ def comentar(identificador):
                 raise
             raise ErroIntegracao(
                 "GitHub não confirmou a publicação. Confira o PR antes de tentar novamente."
-            ) from erro
+            ) from falha
 
         with closing(conectar()) as conexao, conexao:
             conexao.execute(
@@ -351,16 +430,13 @@ def comentar(identificador):
                 (url, identificador),
             )
 
-        return jsonify({"url": url}), 201
+        return JSONResponse({"url": url}, status_code=201)
 
-    except ErroIntegracao as erro:
-        return jsonify({"erro": str(erro)}), 502
-
-
-@app.errorhandler(413)
-def entrada_grande(erro):
-    return jsonify({"erro": "Solicitação maior que o limite permitido."}), 413
+    except ErroIntegracao as falha:
+        return erro(str(falha), 502)
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=5000)
