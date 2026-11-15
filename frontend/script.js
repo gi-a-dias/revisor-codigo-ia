@@ -150,21 +150,73 @@ function nivelDeprioridade(item) {
   return { classe: "low", rotulo: "Baixa" };
 }
 
+// Minúsculas e sem acento, para "excecao" achar "exceção".
+function normalizar(texto) {
+  return String(texto ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function filtrosAtivos() {
+  return (
+    elemento("busca").value.trim() !== "" ||
+    elemento("filtro").value !== "Todos" ||
+    elemento("filtro-prioridade").value !== "Todas"
+  );
+}
+
+function limparFiltros() {
+  elemento("busca").value = "";
+  elemento("filtro").value = "Todos";
+  elemento("filtro-prioridade").value = "Todas";
+}
+
+// Todas as palavras digitadas precisam aparecer em algum campo do achado.
+function combinaComBusca(item, termos) {
+  if (!termos.length) return true;
+
+  const nivel = nivelDeprioridade(item);
+  const palheiro = normalizar([
+    item.titulo,
+    item.sugestao,
+    item.categoria,
+    item.arquivo,
+    item.linha ? `${item.arquivo}:${item.linha}` : "",
+    nivel.rotulo,
+    item.gravidade,
+  ].join(" "));
+
+  return termos.every((termo) => palheiro.includes(termo));
+}
+
 function mostrarAchados() {
   if (!revisaoAtual) return;
 
-  const filtro = elemento("filtro").value;
+  const categoria = elemento("filtro").value;
+  const prioridade = elemento("filtro-prioridade").value;
+  const termos = normalizar(elemento("busca").value).split(/\s+/).filter(Boolean);
 
-  const achados = revisaoAtual.achados.filter(
-    (item) => filtro === "Todos" || item.categoria === filtro
+  const total = revisaoAtual.achados.length;
+  const achados = revisaoAtual.achados.filter((item) =>
+    (categoria === "Todos" || item.categoria === categoria) &&
+    (prioridade === "Todas" || nivelDeprioridade(item).rotulo === prioridade) &&
+    combinaComBusca(item, termos)
   );
+
+  const ativos = filtrosAtivos();
+  elemento("limpar-filtros").hidden = !ativos;
+  elemento("contagem").textContent = ativos
+    ? `Mostrando ${achados.length} de ${total} ${total === 1 ? "achado" : "achados"}.`
+    : "";
 
   elemento("achados").className = "";
 
   if (!achados.length) {
-    elemento("achados").innerHTML =
-      '<p class="vazio">Nenhum achado nesta seleção. ' +
-      "Isso não garante ausência de problemas.</p>";
+    elemento("achados").innerHTML = ativos
+      ? '<p class="vazio">Nenhum achado corresponde aos filtros.</p>'
+      : '<p class="vazio">Nenhum achado nesta revisão. ' +
+        "Isso não garante ausência de problemas.</p>";
     return;
   }
 
@@ -213,6 +265,19 @@ function mostrarRevisao(revisao) {
 }
 
 elemento("filtro").addEventListener("change", mostrarAchados);
+elemento("filtro-prioridade").addEventListener("change", mostrarAchados);
+elemento("busca").addEventListener("input", mostrarAchados);
+elemento("busca").addEventListener("keydown", (evento) => {
+  if (evento.key === "Escape" && elemento("busca").value) {
+    elemento("busca").value = "";
+    mostrarAchados();
+  }
+});
+elemento("limpar-filtros").addEventListener("click", () => {
+  limparFiltros();
+  mostrarAchados();
+  elemento("busca").focus();
+});
 
 elemento("analisar").addEventListener("click", async () => {
   const botao = elemento("analisar");
@@ -266,7 +331,7 @@ elemento("analisar").addEventListener("click", async () => {
 
     const revisao = await api("/api/analisar", dados);
 
-    elemento("filtro").value = "Todos";
+    limparFiltros();
     mostrarRevisao(revisao);
     elemento("status").textContent = "Análise concluída.";
     await carregarHistorico();
@@ -302,7 +367,7 @@ async function carregarHistorico() {
       botao.textContent = "Abrir";
 
       botao.addEventListener("click", () => {
-        elemento("filtro").value = "Todos";
+        limparFiltros();
         mostrarRevisao(revisao);
         window.scrollTo({ top: 0, behavior: "smooth" });
       });

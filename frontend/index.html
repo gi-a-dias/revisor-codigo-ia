@@ -100,17 +100,33 @@
       <section class="card">
         <div class="titulo-resultado">
           <h2>Resultado da revisão</h2>
-          <select id="filtro" aria-label="Filtrar achados">
-            <option value="Todos">Todos</option>
+        </div>
+
+        <p id="contexto" class="descricao">Aguardando uma análise.</p>
+
+        <div class="filtros" role="search">
+          <input id="busca" type="search" autocomplete="off"
+                 aria-label="Buscar nos achados"
+                 placeholder="Buscar por título, arquivo ou sugestão…">
+          <select id="filtro" aria-label="Filtrar por categoria">
+            <option value="Todos">Todas as categorias</option>
             <option value="Segurança">Segurança</option>
             <option value="Code smell">Code smells</option>
             <option value="Arquitetura">Arquitetura</option>
             <option value="Testes">Testes</option>
             <option value="Qualidade">Qualidade</option>
           </select>
+          <select id="filtro-prioridade" aria-label="Filtrar por prioridade">
+            <option value="Todas">Todas as prioridades</option>
+            <option value="Crítica">Crítica</option>
+            <option value="Alta">Alta</option>
+            <option value="Média">Média</option>
+            <option value="Baixa">Baixa</option>
+          </select>
+          <button id="limpar-filtros" class="secundario" type="button" hidden>Limpar filtros</button>
         </div>
+        <p id="contagem" class="contagem" role="status" aria-live="polite"></p>
 
-        <p id="contexto" class="descricao">Aguardando uma análise.</p>
         <div id="achados" class="vazio">Carregue o exemplo para começar.</div>
 
         <section id="painel-ia" class="painel-ia" hidden>
