@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import requests
+from fastapi.testclient import TestClient
 
 
 temporario = tempfile.TemporaryDirectory()
@@ -19,9 +20,7 @@ configuracao = patch.dict(os.environ, {
     "CORS_ORIGINS": "http://localhost:3000",
 })
 configuracao.start()
-from fastapi.testclient import TestClient
-
-from app import app
+from app import app  # noqa: E402  (precisa vir depois de configurar o ambiente de teste)
 
 unittest.addModuleCleanup(temporario.cleanup)
 unittest.addModuleCleanup(configuracao.stop)
