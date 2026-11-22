@@ -18,6 +18,9 @@ configuracao = patch.dict(os.environ, {
     "GEMINI_API_KEY": "",
     "GEMINI_MODEL": "",
     "CORS_ORIGINS": "http://localhost:3000",
+    "NOTIFICACOES_KEY": "",
+    "NOTIFICACOES_PROJECT_ID": "",
+    "NOTIFICACOES_URL": "",
 })
 configuracao.start()
 from app import app  # noqa: E402  (precisa vir depois de configurar o ambiente de teste)
@@ -264,3 +267,147 @@ class RevisorTest(unittest.TestCase):
             "/api/analisar", json=corpo, headers={"Origin": "http://testserver"}
         )
         self.assertEqual(resposta.status_code, 201)
+
+    # ---- Integração com o Módulo 6 (notificações e métricas) ----
+
+    @patch.dict(os.environ, {"NOTIFICACOES_KEY": "chave-de-teste"})
+    def test_notifica_modulo_6_ao_concluir_revisao(self):
+        with patch("notificacoes.requests.post", return_value=Mock(status_code=200)) as envio:
+            resposta = self.analisar("eval('1')", project_id="proj-1")
+
+        self.assertEqual(resposta.status_code, 201)
+        relatorio = resposta.json()
+        self.assertEqual(relatorio["notificacao"]["status"], "enviada")
+
+        envio.assert_called_once()
+        chamada = envio.call_args.kwargs
+        self.assertEqual(chamada["headers"]["X-Integration-Key"], "chave-de-teste")
+        corpo = chamada["json"]
+        self.assertEqual(corpo["event_id"], f"modulo4-review-{relatorio['id']}")
+        self.assertEqual(relatorio["notificacao"]["event_id"], corpo["event_id"])
+        self.assertEqual(corpo["scope"], "project")
+        self.assertEqual(corpo["project_id"], "proj-1")
+        self.assertEqual(corpo["source"], "code_review")
+        self.assertEqual(corpo["type"], "review.completed")
+        self.assertEqual(corpo["priority"], "critical")
+        self.assertIsNone(corpo["link"])
+        self.assertNotIn("chave-de-teste", resposta.text)
+
+    def test_prioridade_e_texto_da_notificacao(self):
+        from notificacoes import montar_notificacao, prioridade_da_revisao
+
+        def achado(categoria, gravidade):
+            return {"categoria": categoria, "gravidade": gravidade}
+
+        self.assertEqual(prioridade_da_revisao([]), "low")
+        self.assertEqual(prioridade_da_revisao([achado("Code smell", "Baixa")]), "low")
+        self.assertEqual(prioridade_da_revisao([achado("Testes", "Média")]), "medium")
+        self.assertEqual(prioridade_da_revisao([achado("Arquitetura", "Alta")]), "high")
+        self.assertEqual(
+            prioridade_da_revisao(
+                [achado("Arquitetura", "Alta"), achado("Segurança", "Alta")]
+            ),
+            "critical",
+        )
+
+        relatorio = {
+            "id": "abc",
+            "arquitetura": "mvc",
+            "achados": [achado("Segurança", "Alta"), achado("Testes", "Média")],
+            "pr": {"numero": 7, "titulo": "Adiciona login", "url": PR_URL},
+        }
+        payload = montar_notificacao(relatorio, "proj-9")
+        self.assertIn("PR #7", payload["title"])
+        self.assertEqual(payload["link"], PR_URL)
+        self.assertIn("1 crítico(s)", payload["body"])
+        self.assertIn("1 médio(s)", payload["body"])
+
+    @patch.dict(os.environ, {"NOTIFICACOES_KEY": "chave-de-teste"})
+    def test_falha_do_modulo_6_nao_derruba_a_revisao(self):
+        casos = (
+            (requests.ConnectionError("fora do ar"), "indisponível"),
+            (Mock(status_code=401), "Chave"),
+            (Mock(status_code=422), "project_id"),
+            (Mock(status_code=500), "500"),
+        )
+
+        for retorno, trecho in casos:
+            with self.subTest(trecho=trecho):
+                mock = {"side_effect": retorno} if isinstance(retorno, Exception) \
+                    else {"return_value": retorno}
+
+                with patch("notificacoes.requests.post", **mock):
+                    resposta = self.analisar("eval('1')", project_id="proj-1")
+
+                self.assertEqual(resposta.status_code, 201)
+                notificacao = resposta.json()["notificacao"]
+                self.assertEqual(notificacao["status"], "falhou")
+                self.assertIn(trecho, notificacao["detalhe"])
+
+    @patch.dict(os.environ, {"NOTIFICACOES_KEY": "chave-de-teste"})
+    def test_sem_project_id_nao_envia(self):
+        with patch("notificacoes.requests.post") as envio:
+            resposta = self.analisar("x = 1")
+
+        self.assertEqual(resposta.status_code, 201)
+        self.assertEqual(resposta.json()["notificacao"]["status"], "sem_projeto")
+        envio.assert_not_called()
+
+    def test_sem_chave_de_integracao_nao_envia(self):
+        with patch("notificacoes.requests.post") as envio:
+            resposta = self.analisar("x = 1", project_id="proj-1")
+
+        self.assertEqual(resposta.status_code, 201)
+        self.assertEqual(resposta.json()["notificacao"]["status"], "nao_configurada")
+        envio.assert_not_called()
+
+    def test_project_id_invalido(self):
+        for valor in (123, "", "   ", "x" * 101):
+            with self.subTest(valor=valor):
+                self.assertEqual(self.analisar(project_id=valor).status_code, 400)
+
+    @patch.dict(os.environ, {"NOTIFICACOES_KEY": "chave-de-teste"})
+    def test_reenvio_usa_o_mesmo_event_id(self):
+        with patch("notificacoes.requests.post", return_value=Mock(status_code=200)) as envio:
+            relatorio = self.analisar("x = 1", project_id="proj-1").json()
+            reenvio = self.cliente.post(f"/api/revisoes/{relatorio['id']}/notificar")
+
+        self.assertEqual(reenvio.status_code, 200)
+        self.assertEqual(
+            [chamada.kwargs["json"]["event_id"] for chamada in envio.call_args_list],
+            [f"modulo4-review-{relatorio['id']}"] * 2,
+        )
+        self.assertEqual(
+            self.cliente.post("/api/revisoes/nao-existe/notificar").status_code, 404
+        )
+
+    def test_metricas_para_o_dashboard(self):
+        for _ in range(2):
+            self.assertEqual(
+                self.analisar("eval('1')", project_id="proj-metricas").status_code, 201
+            )
+
+        resposta = self.cliente.get("/api/metricas?project_id=proj-metricas&dias=7")
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.json()
+        self.assertEqual(dados["total_revisoes"], 2)
+        self.assertEqual(dados["por_prioridade"]["critical"], 2)
+        self.assertEqual(dados["por_prioridade"]["medium"], 2)
+        self.assertEqual(dados["total_achados"], 4)
+        self.assertEqual(dados["por_categoria"], {"Segurança": 2, "Testes": 2})
+        self.assertEqual(len(dados["revisoes_por_dia"]), 7)
+        self.assertEqual(dados["revisoes_por_dia"][-1]["revisoes"], 2)
+        self.assertEqual(len(dados["ultimas_revisoes"]), 2)
+        self.assertEqual(dados["ultimas_revisoes"][0]["project_id"], "proj-metricas")
+
+        vazio = self.cliente.get("/api/metricas?project_id=nao-existe").json()
+        self.assertEqual(vazio["total_revisoes"], 0)
+        self.assertEqual(len(vazio["revisoes_por_dia"]), 14)
+
+        for consulta in ("dias=0", "dias=91", "dias=abc"):
+            self.assertEqual(self.cliente.get(f"/api/metricas?{consulta}").status_code, 400)
+
+    @patch.dict(os.environ, {"REVIEW_ACCESS_KEY": "senha"})
+    def test_metricas_exigem_senha(self):
+        self.assertEqual(self.cliente.get("/api/metricas").status_code, 401)
+        self.assertEqual(self.cliente.get("/api/metricas", headers=AUTH).status_code, 200)

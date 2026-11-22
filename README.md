@@ -101,6 +101,38 @@ $env:SERVIR_FRONTEND = "1"
 
 Abra http://127.0.0.1:5000.
 
+## Integração com o Módulo 6 (Dashboard e Notificações)
+
+**Notificações (nós → Módulo 6).** Ao concluir uma revisão, o serviço envia um
+evento `review.completed` (`source: code_review`) para a Central de
+Notificações do Módulo 6. A prioridade vem dos achados: falha de segurança grave
+é `critical`; senão vale a maior gravidade encontrada (`high`, `medium`, `low`).
+O `event_id` é `modulo4-review-<id da revisão>`, então reenviar não duplica.
+Uma falha do Módulo 6 nunca derruba a revisão: o resultado aparece no campo
+`notificacao` da resposta.
+
+Variáveis (veja `backend/.env.example`):
+
+- `NOTIFICACOES_KEY`: chave de integração fornecida pelo Módulo 6. **Segredo:**
+  fica só no `.env` e nas configurações do Azure, nunca no código.
+- `NOTIFICACOES_PROJECT_ID`: projeto padrão (ID real do Módulo 1). Também pode
+  ser enviado a cada chamada em `project_id` no corpo de `POST /api/analisar`.
+  Sem `project_id`, a revisão funciona e a notificação não é enviada.
+- `NOTIFICACOES_URL`: opcional, só se o Módulo 6 mudar de endereço.
+
+Para o primeiro teste real (imprime o `event_id` para o Módulo 6 conferir):
+
+```powershell
+.\.venv\Scripts\python.exe backend/testar_notificacao.py ID_REAL_DO_PROJETO
+```
+
+`POST /api/revisoes/{id}/notificar` reenvia a notificação de uma revisão.
+
+**Métricas (Módulo 6 → nós).** `GET /api/metricas` devolve números prontos para
+gráficos: totais, achados por prioridade (`critical`, `high`, `medium`, `low`),
+por categoria, revisões por dia e as últimas revisões. Parâmetros opcionais:
+`project_id` e `dias` (1 a 90, padrão 14). Usa a mesma autenticação da API.
+
 ## Limites e regras
 
 O serviço analisa até 20 arquivos Python e 100 KB de código por revisão. As

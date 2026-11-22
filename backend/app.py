@@ -6,7 +6,7 @@ import os
 import sqlite3
 import uuid
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -18,7 +18,14 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from analisador import REGRAS, analisar
 from gemini import consultar_ia
+import modulo3
+import modulo5
 from github_pr import ErroIntegracao, carregar_pr, obter_sha, publicar_revisao
+from notificacoes import (
+    PRIORIDADES,
+    contar_por_prioridade,
+    notificar_revisao,
+)
 
 
 PASTA = Path(__file__).resolve().parent
@@ -356,6 +363,16 @@ def processar_analise(dados):
     if not isinstance(arquitetura, str) or arquitetura not in REGRAS:
         return erro("Arquitetura inválida.", 400)
 
+    # Projeto do Módulo 1 a que a revisão pertence (usado nas notificações).
+    project_id = dados.get("project_id")
+
+    if project_id is None:
+        project_id = os.getenv("NOTIFICACOES_PROJECT_ID", "").strip() or None
+    elif not isinstance(project_id, str) or not 1 <= len(project_id.strip()) <= 100:
+        return erro("project_id inválido.", 400)
+    else:
+        project_id = project_id.strip()
+
     try:
         pr = None
 
@@ -372,6 +389,7 @@ def processar_analise(dados):
             "id": str(uuid.uuid4()),
             "criado_em": datetime.now(timezone.utc).isoformat(),
             "arquitetura": arquitetura,
+            "project_id": project_id,
             "pr": pr,
             "ia": {
                 "status": "Não solicitada",
@@ -385,6 +403,9 @@ def processar_analise(dados):
         relatorio["markdown"] = gerar_markdown(relatorio)
         salvar(relatorio)
 
+        # Só avisa o Módulo 6 depois de salvar, e uma falha dele não afeta a revisão.
+        relatorio["notificacao"] = notificar_revisao(relatorio)
+
         return JSONResponse(relatorio, status_code=201)
 
     except UnicodeEncodeError:
@@ -397,7 +418,33 @@ def processar_analise(dados):
         return erro(str(falha), 502)
 
 
-@app.post("/api/analisar")
+CORPO_ANALISAR = {
+    "required": True,
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "pr_url": {"type": "string"},
+                    "arquivos": {"type": "array", "items": {"type": "object"}},
+                    "arquitetura": {"type": "string", "enum": list(REGRAS)},
+                    "usar_ia": {"type": "boolean"},
+                    "project_id": {"type": "string"},
+                },
+            },
+            "example": {
+                "arquivos": [{
+                    "caminho": "src/controllers/exemplo.py",
+                    "conteudo": "def cadastrar(dados):\n    return eval(dados)\n",
+                }],
+                "arquitetura": "multicamadas",
+            },
+        }
+    },
+}
+
+
+@app.post("/api/analisar", openapi_extra={"requestBody": CORPO_ANALISAR})
 async def revisar(request: Request):
     dados, resposta = await ler_json(request)
 
@@ -478,6 +525,155 @@ def comentar(identificador: str):
 
     except ErroIntegracao as falha:
         return erro(str(falha), 502)
+
+
+@app.post("/api/revisoes/{identificador}/notificar")
+def renotificar(identificador: str):
+    """Reenvia a notificação ao Módulo 6 (seguro: o event_id é o mesmo)."""
+    relatorio = buscar(identificador)
+
+    if not relatorio:
+        return erro("Revisão não encontrada.", 404)
+
+    notificacao = notificar_revisao(relatorio)
+    codigos = {
+        "enviada": 200,
+        "nao_configurada": 503,
+        "sem_projeto": 400,
+        "falhou": 502,
+    }
+
+    return JSONResponse(
+        {"notificacao": notificacao}, status_code=codigos[notificacao["status"]]
+    )
+
+
+@app.get("/api/metricas")
+def metricas(request: Request):
+    """Números prontos para gráficos do dashboard (Módulo 6)."""
+    consulta = request.query_params
+    project_id = (consulta.get("project_id") or "").strip() or None
+
+    try:
+        dias = int(consulta.get("dias", 14))
+    except ValueError:
+        return erro("O parâmetro dias deve ser um número.", 400)
+
+    if not 1 <= dias <= 90:
+        return erro("O parâmetro dias deve estar entre 1 e 90.", 400)
+
+    with closing(conectar()) as conexao, conexao:
+        linhas = conexao.execute(
+            "SELECT relatorio FROM revisoes ORDER BY criado_em DESC LIMIT 500"
+        ).fetchall()
+
+    revisoes = [json.loads(linha["relatorio"]) for linha in linhas]
+
+    if project_id:
+        revisoes = [r for r in revisoes if r.get("project_id") == project_id]
+
+    por_prioridade = dict.fromkeys(PRIORIDADES, 0)
+    por_categoria = {}
+
+    hoje = datetime.now(timezone.utc).date()
+    por_dia = {
+        (hoje - timedelta(days=atras)).isoformat(): {"revisoes": 0, "achados": 0}
+        for atras in range(dias - 1, -1, -1)
+    }
+
+    for revisao in revisoes:
+        contagem = contar_por_prioridade(revisao["achados"])
+
+        for nivel in PRIORIDADES:
+            por_prioridade[nivel] += contagem[nivel]
+
+        for item in revisao["achados"]:
+            por_categoria[item["categoria"]] = por_categoria.get(item["categoria"], 0) + 1
+
+        dia = revisao["criado_em"][:10]
+
+        if dia in por_dia:
+            por_dia[dia]["revisoes"] += 1
+            por_dia[dia]["achados"] += len(revisao["achados"])
+
+    ultimas = [
+        {
+            "id": r["id"],
+            "criado_em": r["criado_em"],
+            "project_id": r.get("project_id"),
+            "arquitetura": r["arquitetura"],
+            "pr": (
+                {"numero": r["pr"]["numero"], "titulo": r["pr"]["titulo"], "url": r["pr"]["url"]}
+                if r.get("pr")
+                else None
+            ),
+            "total_achados": len(r["achados"]),
+            "por_prioridade": contar_por_prioridade(r["achados"]),
+        }
+        for r in revisoes[:10]
+    ]
+
+    return {
+        "gerado_em": datetime.now(timezone.utc).isoformat(),
+        "project_id": project_id,
+        "total_revisoes": len(revisoes),
+        "total_achados": sum(por_prioridade.values()),
+        "por_prioridade": por_prioridade,
+        "por_categoria": por_categoria,
+        "revisoes_por_dia": [{"data": dia, **valores} for dia, valores in por_dia.items()],
+        "ultimas_revisoes": ultimas,
+    }
+
+
+def chamar_modulo(funcao, *args):
+    """Converte as falhas dos clientes de outros módulos em respostas HTTP."""
+    try:
+        return JSONResponse(funcao(*args))
+    except ValueError as falha:
+        return erro(str(falha), 400)
+    except ErroIntegracao as falha:
+        return erro(str(falha), 502)
+
+
+@app.get("/api/modulo3/projetos")
+def modulo3_projetos():
+    return chamar_modulo(modulo3.listar_projetos)
+
+
+@app.get("/api/modulo3/projetos/{project_id}/artefatos")
+def modulo3_artefatos(project_id: str, search: str = "", tipo: str = ""):
+    return chamar_modulo(
+        modulo3.listar_artefatos, project_id, search or None, tipo or None
+    )
+
+
+@app.get("/api/modulo3/projetos/{project_id}/artefatos/{artifact_id}/versoes")
+def modulo3_versoes(project_id: str, artifact_id: str):
+    return chamar_modulo(modulo3.listar_versoes, project_id, artifact_id)
+
+
+@app.get("/api/modulo3/analises/{analysis_id}")
+def modulo3_analise(analysis_id: str):
+    """Análise de IA do Módulo 3, com a arquitetura já traduzida para os nossos estilos."""
+    return chamar_modulo(
+        lambda: modulo3.resumir_analise(modulo3.obter_analise(analysis_id))
+    )
+
+
+@app.post("/api/revisoes/{identificador}/leitura-recomendada")
+def leitura_recomendada(identificador: str):
+    """Pede ao Módulo 5 artigos sobre os temas dos achados desta revisão."""
+    relatorio = buscar(identificador)
+
+    if not relatorio:
+        return erro("Revisão não encontrada.", 404)
+
+    pergunta = modulo5.montar_pergunta(relatorio)
+
+    return chamar_modulo(
+        lambda: {"pergunta": pergunta, "resposta": modulo5.buscar_leitura(pergunta)}
+    )
+
 
 
 # Deve ser a última rota: só atende o que nenhuma rota da API reconheceu.
