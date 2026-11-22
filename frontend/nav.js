@@ -5,19 +5,20 @@
  *   2. no <head>, antes do seu script:  <script>window.MODULO_ATUAL = 4;</script>
  *                                        <script defer src="nav.js"></script>
  *
- * Ela cria a barra sozinha (HTML + CSS), usa as cores do guia do Módulo 6 e
- * funciona nos temas claro e escuro. Para trocar um endereço, edite só MODULOS.
+ * Ela cria a barra sozinha (HTML + CSS) e segue o guia do Módulo 6: fundo
+ * --color-primary, item ativo --color-primary-hover, uma só cor para todos os
+ * módulos (o módulo é identificado por ícone + rótulo), claro e escuro. Para trocar um endereço, edite só MODULOS.
  * Módulos com endereço null aparecem desativados, sem link quebrado.
  */
 (function () {
   const MODULOS = [
-    { n: 1, nome: "Projetos", url: "https://green-river-02e44e810.2.azurestaticapps.net/" },
-    { n: 2, nome: "GitHub Sync", url: null },
-    { n: 3, nome: "Artefatos", url: "https://modulo3-fhgjdpa6d5bbfvff.canadacentral-01.azurewebsites.net/app/" },
-    { n: 4, nome: "Code Review", url: "https://revisor-codigo-ia-gio-ach9dbg3g9ekazf3.chilecentral-01.azurewebsites.net/" },
-    { n: 5, nome: "Curadoria", url: "https://frontmodulo5-ecaqg8fghzhyeuh2.brazilsouth-01.azurewebsites.net/" },
-    { n: 6, nome: "Notificações", url: null },
-    { n: 7, nome: "MackAI", url: "https://mackai-conversas.calmfield-d7c6c49f.brazilsouth.azurecontainerapps.io/" },
+    { n: 1, icone: "▣", nome: "Projetos", url: "https://green-river-02e44e810.2.azurestaticapps.net/" },
+    { n: 2, icone: "☍", nome: "GitHub Sync", url: null },
+    { n: 3, icone: "▤", nome: "Artefatos", url: "https://modulo3-fhgjdpa6d5bbfvff.canadacentral-01.azurewebsites.net/app/" },
+    { n: 4, icone: "⚙", nome: "Code Review", url: "https://revisor-codigo-ia-gio-ach9dbg3g9ekazf3.chilecentral-01.azurewebsites.net/" },
+    { n: 5, icone: "★", nome: "Curadoria", url: "https://frontmodulo5-ecaqg8fghzhyeuh2.brazilsouth-01.azurewebsites.net/" },
+    { n: 6, icone: "✉", nome: "Notificações", url: null },
+    { n: 7, icone: "✦", nome: "MackAI", url: "https://mackai-conversas.calmfield-d7c6c49f.brazilsouth.azurecontainerapps.io/" },
   ];
 
   const CSS = `
@@ -32,21 +33,21 @@
   }
   .barra-modulos .bm-marca {
     margin-right: 12px; padding-right: 16px; white-space: nowrap;
-    color: #FFFFFF; font-weight: 600;
+    color: var(--color-on-primary, #FFFFFF); font-weight: 600;
     border-right: 1px solid var(--color-primary-hover, #2F3F7F);
   }
   .barra-modulos .bm-marca span { color: var(--color-brand-accent, #C8102E); }
   .barra-modulos a, .barra-modulos .bm-off {
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
-    padding: 8px 12px; border-radius: 8px; color: #FFFFFF; text-decoration: none;
+    padding: 8px 12px; border-radius: 8px; color: var(--color-on-primary, #FFFFFF); text-decoration: none;
   }
   .barra-modulos a:hover { background: var(--color-primary-hover, #2F3F7F); }
   .barra-modulos a[aria-current="page"] {
     background: var(--color-primary-hover, #2F3F7F); font-weight: 600;
   }
   .barra-modulos .bm-off { opacity: .55; cursor: not-allowed; }
-  .barra-modulos .bm-n { font-variant-numeric: tabular-nums; opacity: .8; }
-  .barra-modulos a:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 2px; }
+  .barra-modulos .bm-i { opacity: .9; }
+  .barra-modulos a:focus-visible { outline: 2px solid var(--color-on-primary, #FFFFFF); outline-offset: 2px; }
   `;
 
   function montar() {
@@ -68,7 +69,7 @@
     nav.appendChild(marca);
 
     MODULOS.forEach((m) => {
-      const rotulo = `<span class="bm-n">${String(m.n).padStart(2, "0")}</span> ${m.nome}`;
+      const rotulo = `<span class="bm-i" aria-hidden="true">${m.icone}</span> ${m.nome}`;
       let item;
 
       if (m.url) {
