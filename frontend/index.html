@@ -11,6 +11,8 @@
   <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="style.css">
   <script src="tema.js"></script>
+  <script>window.MODULO_ATUAL = 4;</script>
+  <script defer src="nav.js"></script>
   <script src="config.js"></script>
   <script defer src="script.js"></script>
 </head>
@@ -100,15 +102,29 @@
       <section class="card">
         <div class="titulo-resultado">
           <h2>Resultado da revisão</h2>
-          <select id="filtro" aria-label="Filtrar achados">
-            <option value="Todos">Todos</option>
+        </div>
+
+        <div class="filtros">
+          <input id="busca" type="search" placeholder="Buscar nos achados..."
+                 aria-label="Buscar nos achados" autocomplete="off">
+          <select id="filtro" aria-label="Filtrar por categoria">
+            <option value="Todos">Todas as categorias</option>
             <option value="Segurança">Segurança</option>
             <option value="Code smell">Code smells</option>
             <option value="Arquitetura">Arquitetura</option>
             <option value="Testes">Testes</option>
             <option value="Qualidade">Qualidade</option>
           </select>
+          <select id="filtro-prioridade" aria-label="Filtrar por prioridade">
+            <option value="Todas">Todas as prioridades</option>
+            <option value="Crítica">Crítica</option>
+            <option value="Alta">Alta</option>
+            <option value="Média">Média</option>
+            <option value="Baixa">Baixa</option>
+          </select>
+          <button id="limpar-filtros" class="secundario" type="button" hidden>Limpar filtros</button>
         </div>
+        <p id="contagem" class="descricao" role="status" aria-live="polite"></p>
 
         <p id="contexto" class="descricao">Aguardando uma análise.</p>
         <div id="achados" class="vazio">Carregue o exemplo para começar.</div>
