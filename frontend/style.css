@@ -153,7 +153,10 @@ button:disabled { opacity: .55; cursor: wait; }
 .linha-botoes { margin-top: 16px; flex-wrap: wrap; }
 
 .titulo-resultado { justify-content: space-between; align-items: start; }
-.titulo-resultado select { width: 150px; font-size: var(--text-sm); }
+.filtros { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+.filtros input { flex: 1 1 200px; width: auto; }
+.filtros select { flex: 0 1 190px; width: auto; font-size: var(--text-sm); }
+.filtros button { padding: 8px 12px; font-size: var(--text-sm); }
 .vazio { color: var(--color-text-muted); padding: 32px 0; text-align: center; }
 
 /* Achados: a cor indica a prioridade (borda + selo); o ícone e o rótulo indicam a categoria */
