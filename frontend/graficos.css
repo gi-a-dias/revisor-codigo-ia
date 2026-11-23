@@ -1,0 +1,53 @@
+/* Página de gráficos para embutir (iframe) no dashboard do Módulo 6.
+   Usa só os tokens do guia visual (tokens.css). */
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--color-bg); color: var(--color-text);
+  font-family: var(--font-sans); font-size: var(--text-sm);
+}
+.g { max-width: 960px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+.g-topo h1 { margin: 0; font-size: var(--text-lg); }
+.g-topo h1 span {
+  margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+  background: var(--color-primary); color: var(--color-on-primary); font-size: var(--text-xs);
+}
+.g-muted { margin: 4px 0 0; color: var(--color-text-muted); font-size: var(--text-xs); }
+
+.g-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.g-kpis > div, .g-card {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: 12px; padding: 16px;
+}
+.g-kpis span { display: block; color: var(--color-text-muted); font-size: var(--text-xs); font-weight: 500; }
+.g-kpis strong { font-size: var(--text-2xl); font-variant-numeric: tabular-nums; }
+.g-card h2 { margin: 0 0 12px; font-size: var(--text-md); }
+
+/* barras horizontais */
+.barras { display: grid; gap: 8px; }
+.barra { display: grid; grid-template-columns: 110px 1fr 40px; align-items: center; gap: 8px; }
+.barra .rot { font-size: var(--text-xs); color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barra .trilho { height: 14px; background: var(--color-bg); border-radius: 7px; overflow: hidden; }
+.barra .preench { height: 100%; border-radius: 7px; min-width: 2px; }
+.barra .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* colunas por dia */
+.colunas { display: flex; align-items: flex-end; gap: 4px; height: 140px; }
+.coluna { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+.coluna i { display: block; width: 100%; max-width: 28px; background: var(--chart-1); border-radius: 4px 4px 0 0; min-height: 2px; }
+.coluna.zero i { background: var(--color-border); }
+.coluna b { font-size: 10px; font-weight: 600; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
+.eixo { display: flex; gap: 4px; margin-top: 4px; }
+.eixo span { flex: 1; text-align: center; font-size: 10px; color: var(--color-text-muted); min-width: 0; overflow: hidden; }
+
+.vazio { color: var(--color-text-muted); font-size: var(--text-xs); margin: 0; }
+.g-erro { margin: 0; padding: 12px; border-radius: 8px; border: 1px solid var(--color-priority-critical); color: var(--color-priority-critical); background: var(--color-surface); }
+
+@media (max-width: 520px) {
+  .g { padding: 12px; }
+  .g-kpis { gap: 8px; }
+  .g-kpis > div { padding: 12px; }
+  .g-kpis strong { font-size: var(--text-xl); }
+  .barra { grid-template-columns: 84px 1fr 32px; }
+}
+.eixo span { white-space: nowrap; overflow: visible; }
+@media (max-width: 520px) { .eixo span { font-size: 9px; } }
