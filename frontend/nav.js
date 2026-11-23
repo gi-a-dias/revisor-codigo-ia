@@ -13,7 +13,7 @@
 (function () {
   const MODULOS = [
     { n: 1, icone: "▣", nome: "Projetos", url: "https://green-river-02e44e810.2.azurestaticapps.net/" },
-    { n: 2, icone: "☍", nome: "GitHub Sync", url: null },
+    { n: 2, icone: "☍", nome: "GitHub Sync", url: "https://ai-platform-github-service-eduardo-frapb8fbbcd0bfdm.brazilsouth-01.azurewebsites.net/" },
     { n: 3, icone: "▤", nome: "Artefatos", url: "https://modulo3-fhgjdpa6d5bbfvff.canadacentral-01.azurewebsites.net/app/" },
     { n: 4, icone: "⚙", nome: "Code Review", url: "https://revisor-codigo-ia-gio-ach9dbg3g9ekazf3.chilecentral-01.azurewebsites.net/" },
     { n: 5, icone: "★", nome: "Curadoria", url: "https://frontmodulo5-ecaqg8fghzhyeuh2.brazilsouth-01.azurewebsites.net/" },
