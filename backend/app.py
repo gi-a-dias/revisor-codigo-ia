@@ -240,6 +240,10 @@ def rota_publica(request):
     if caminho == "/api/health":
         return True
 
+    # Só contagens agregadas, para a página de gráficos embutida pelo Módulo 6.
+    if caminho == "/api/dashboard/metricas" and request.method == "GET":
+        return True
+
     # A página e seus arquivos precisam abrir sem senha para a tela de login
     # aparecer; a API continua protegida.
     return (
@@ -548,20 +552,23 @@ def renotificar(identificador: str):
     )
 
 
-@app.get("/api/metricas")
-def metricas(request: Request):
-    """Números prontos para gráficos do dashboard (Módulo 6)."""
+def ler_parametros_metricas(request):
+    """Lê project_id e dias da consulta. Retorna (project_id, dias, resposta_de_erro)."""
     consulta = request.query_params
     project_id = (consulta.get("project_id") or "").strip() or None
 
     try:
         dias = int(consulta.get("dias", 14))
     except ValueError:
-        return erro("O parâmetro dias deve ser um número.", 400)
+        return None, None, erro("O parâmetro dias deve ser um número.", 400)
 
     if not 1 <= dias <= 90:
-        return erro("O parâmetro dias deve estar entre 1 e 90.", 400)
+        return None, None, erro("O parâmetro dias deve estar entre 1 e 90.", 400)
 
+    return project_id, dias, None
+
+
+def calcular_metricas(project_id, dias):
     with closing(conectar()) as conexao, conexao:
         linhas = conexao.execute(
             "SELECT relatorio FROM revisoes ORDER BY criado_em DESC LIMIT 500"
@@ -574,6 +581,7 @@ def metricas(request: Request):
 
     por_prioridade = dict.fromkeys(PRIORIDADES, 0)
     por_categoria = {}
+    por_arquitetura = {}
 
     hoje = datetime.now(timezone.utc).date()
     por_dia = {
@@ -589,6 +597,9 @@ def metricas(request: Request):
 
         for item in revisao["achados"]:
             por_categoria[item["categoria"]] = por_categoria.get(item["categoria"], 0) + 1
+
+        estilo = revisao["arquitetura"]
+        por_arquitetura[estilo] = por_arquitetura.get(estilo, 0) + 1
 
         dia = revisao["criado_em"][:10]
 
@@ -620,9 +631,43 @@ def metricas(request: Request):
         "total_achados": sum(por_prioridade.values()),
         "por_prioridade": por_prioridade,
         "por_categoria": por_categoria,
+        "por_arquitetura": por_arquitetura,
         "revisoes_por_dia": [{"data": dia, **valores} for dia, valores in por_dia.items()],
         "ultimas_revisoes": ultimas,
     }
+
+
+@app.get("/api/metricas")
+def metricas(request: Request):
+    """Números prontos para gráficos do dashboard (Módulo 6). Exige a senha."""
+    project_id, dias, falha = ler_parametros_metricas(request)
+
+    if falha:
+        return falha
+
+    return calcular_metricas(project_id, dias)
+
+
+@app.get("/api/dashboard/metricas")
+def metricas_publicas(request: Request):
+    """Mesmos números, só agregados, sem senha: alimenta a página de gráficos
+    embutida no dashboard do Módulo 6. Não traz código, títulos nem links de PR."""
+    project_id, dias, falha = ler_parametros_metricas(request)
+
+    if falha:
+        return falha
+
+    dados = calcular_metricas(project_id, dias)
+    dados.pop("ultimas_revisoes")
+
+    return JSONResponse(
+        dados,
+        headers={
+            # São só contagens: qualquer página pode ler (o dashboard do M6 inclusive).
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=30",
+        },
+    )
 
 
 def chamar_modulo(funcao, *args):

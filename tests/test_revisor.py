@@ -407,6 +407,26 @@ class RevisorTest(unittest.TestCase):
         for consulta in ("dias=0", "dias=91", "dias=abc"):
             self.assertEqual(self.cliente.get(f"/api/metricas?{consulta}").status_code, 400)
 
+    def test_metricas_publicas_so_trazem_agregados(self):
+        self.assertEqual(self.analisar("eval('1')", project_id="proj-pub").status_code, 201)
+
+        resposta = self.cliente.get("/api/dashboard/metricas?project_id=proj-pub&dias=7")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.headers["access-control-allow-origin"], "*")
+        dados = resposta.json()
+        self.assertEqual(dados["total_revisoes"], 1)
+        self.assertEqual(dados["por_arquitetura"], {"multicamadas": 1})
+        self.assertNotIn("ultimas_revisoes", dados)
+        self.assertEqual(len(dados["revisoes_por_dia"]), 7)
+        self.assertEqual(self.cliente.get("/api/dashboard/metricas?dias=0").status_code, 400)
+
+    @patch.dict(os.environ, {"REVIEW_ACCESS_KEY": "senha"})
+    def test_metricas_publicas_abrem_sem_senha_mas_o_resto_nao(self):
+        self.assertEqual(self.cliente.get("/api/dashboard/metricas").status_code, 200)
+        self.assertEqual(self.cliente.get("/api/metricas").status_code, 401)
+        self.assertEqual(self.cliente.get("/api/historico").status_code, 401)
+        self.assertEqual(self.cliente.post("/api/dashboard/metricas").status_code, 401)
+
     @patch.dict(os.environ, {"REVIEW_ACCESS_KEY": "senha"})
     def test_metricas_exigem_senha(self):
         self.assertEqual(self.cliente.get("/api/metricas").status_code, 401)

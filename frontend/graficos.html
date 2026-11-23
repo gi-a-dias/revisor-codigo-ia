@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gráficos do Code Review</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="graficos.css">
+  <script src="config.js"></script>
+</head>
+<body>
+  <main class="g">
+    <header class="g-topo">
+      <h1>Code Review automatizado <span>Módulo 4</span></h1>
+      <p id="g-sub" class="g-muted">Carregando…</p>
+    </header>
+
+    <section class="g-kpis" aria-label="Resumo">
+      <div><span>Revisões</span><strong id="k-rev">–</strong></div>
+      <div><span>Achados</span><strong id="k-ach">–</strong></div>
+      <div><span>Críticos e altos</span><strong id="k-crit">–</strong></div>
+    </section>
+
+    <section class="g-card" aria-labelledby="t-prio">
+      <h2 id="t-prio">Achados por prioridade</h2>
+      <div id="c-prio"></div>
+    </section>
+
+    <section class="g-card" aria-labelledby="t-dia">
+      <h2 id="t-dia">Revisões por dia</h2>
+      <div id="c-dia"></div>
+    </section>
+
+    <section class="g-card" aria-labelledby="t-cat">
+      <h2 id="t-cat">Achados por categoria</h2>
+      <div id="c-cat"></div>
+    </section>
+
+    <section class="g-card" aria-labelledby="t-arq">
+      <h2 id="t-arq">Estilos de arquitetura analisados</h2>
+      <div id="c-arq"></div>
+    </section>
+
+    <p id="g-erro" class="g-erro" role="alert" hidden></p>
+  </main>
+  <script src="graficos.js"></script>
+</body>
+</html>
