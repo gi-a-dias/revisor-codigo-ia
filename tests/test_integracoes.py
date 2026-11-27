@@ -18,9 +18,12 @@ configuracao = patch.dict(os.environ, {
     "NOTIFICACOES_KEY": "",
     "NOTIFICACOES_PROJECT_ID": "",
     "NOTIFICACOES_URL": "",
+    "MODULO2_EMAIL": "servico@revisor.dev",
+    "MODULO2_SENHA": "senha-de-teste-123",
 })
 configuracao.start()
 from app import app  # noqa: E402  (precisa vir depois de configurar o ambiente de teste)
+import modulo2  # noqa: E402
 import modulo3  # noqa: E402
 import modulo5  # noqa: E402
 
@@ -156,3 +159,85 @@ class Modulo5Test(unittest.TestCase):
             retorno = self.cliente.post(f"/api/revisoes/{revisao['id']}/leitura-recomendada")
 
         self.assertEqual(retorno.status_code, 502)
+
+
+PROJETO = "f092329c-0747-4b88-92f0-c3036786ce91"
+REPOS = [
+    {"id": 7, "project_id": PROJETO, "owner": "gi-a-dias", "name": "revisor-codigo-ia",
+     "full_name": "gi-a-dias/revisor-codigo-ia", "default_branch": "main"},
+    {"id": 9, "project_id": None, "owner": "outra", "name": "coisa",
+     "full_name": "outra/coisa", "default_branch": "main"},
+]
+PRS_PAGINA = {"count": 3, "next": None, "results": [
+    {"repository": "gi-a-dias/revisor-codigo-ia", "number": 8, "title": "integração",
+     "state": "open", "author": "gi-a-dias", "updated_at": "2026-11-22T10:00:00Z"},
+    {"repository": "coisa", "number": 2, "title": "outro", "state": "closed",
+     "author": "x", "updated_at": "2026-11-20T10:00:00Z"},
+    {"repository": "7", "number": 10, "title": "barra", "state": "merged",
+     "author": "gi-a-dias", "updated_at": "2026-11-23T10:00:00Z"},
+]}
+
+
+class Modulo2Test(unittest.TestCase):
+    def setUp(self):
+        self.cliente = TestClient(app)
+        modulo2._token.update(valor=None, expira_em=0.0)
+
+    def token(self):
+        return resposta(200, {"access_token": "jwt", "token_type": "Bearer", "expires_in": 900})
+
+    @patch("modulo2.requests.get")
+    @patch("modulo2.requests.post")
+    def test_lista_prs_com_link_e_filtra_por_projeto(self, post, get):
+        post.return_value = self.token()
+        get.side_effect = [resposta(200, REPOS), resposta(200, PRS_PAGINA)]
+
+        dados = self.cliente.get(f"/api/modulo2/pull-requests?project_id={PROJETO}").json()
+
+        self.assertEqual(
+            [(p["numero"], p["url"]) for p in dados],
+            [
+                (10, "https://github.com/gi-a-dias/revisor-codigo-ia/pull/10"),
+                (8, "https://github.com/gi-a-dias/revisor-codigo-ia/pull/8"),
+            ],
+        )
+        self.assertEqual(get.call_args.kwargs["headers"]["Authorization"], "Bearer jwt")
+        self.assertEqual(post.call_args.kwargs["json"]["email"], "servico@revisor.dev")
+
+        # Sem projeto, traz todos; o token fica em cache (não faz login de novo).
+        get.side_effect = [resposta(200, REPOS), resposta(200, PRS_PAGINA)]
+        todos = self.cliente.get("/api/modulo2/pull-requests").json()
+        self.assertEqual(len(todos), 3)
+        self.assertEqual(post.call_count, 1)
+
+        get.side_effect = [resposta(200, REPOS), resposta(200, PRS_PAGINA)]
+        abertos = self.cliente.get("/api/modulo2/pull-requests?abertos=true").json()
+        self.assertEqual([p["numero"] for p in abertos], [8])
+
+    @patch("modulo2.requests.get")
+    @patch("modulo2.requests.post")
+    def test_token_expirado_e_renovado_uma_vez(self, post, get):
+        post.return_value = self.token()
+        get.side_effect = [resposta(401), resposta(200, REPOS)]
+        dados = self.cliente.get("/api/modulo2/repositorios").json()
+        self.assertEqual(dados[0]["repositorio"], "gi-a-dias/revisor-codigo-ia")
+        self.assertEqual(post.call_count, 2)
+
+    @patch("modulo2.requests.post")
+    def test_falhas_viram_erros_claros(self, post):
+        post.return_value = resposta(401)
+        falha = self.cliente.get("/api/modulo2/repositorios")
+        self.assertEqual(falha.status_code, 502)
+        self.assertIn("recusou o login", falha.json()["erro"])
+
+        post.side_effect = requests.ConnectionError()
+        self.assertEqual(self.cliente.get("/api/modulo2/repositorios").status_code, 502)
+
+        self.assertEqual(
+            self.cliente.get("/api/modulo2/repositorios?project_id=abc").status_code, 400
+        )
+
+        with patch.dict(os.environ, {"MODULO2_EMAIL": ""}):
+            sem_conta = self.cliente.get("/api/modulo2/repositorios")
+            self.assertEqual(sem_conta.status_code, 502)
+            self.assertIn("MODULO2_EMAIL", sem_conta.json()["erro"])

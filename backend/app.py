@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from analisador import REGRAS, analisar
 from gemini import consultar_ia
+import modulo2
 import modulo3
 import modulo5
 from github_pr import ErroIntegracao, carregar_pr, obter_sha, publicar_revisao
@@ -55,8 +56,35 @@ BANCO = Path(
 BANCO.parent.mkdir(parents=True, exist_ok=True)
 
 
+def ligado(variavel):
+    return os.getenv(variavel, "").strip().lower() in {"1", "true", "sim", "yes"}
+
+
 def servindo_frontend():
-    return os.getenv("SERVIR_FRONTEND", "").strip().lower() in {"1", "true", "sim", "yes"}
+    return ligado("SERVIR_FRONTEND")
+
+
+def acesso_aberto():
+    """Com ACESSO_ABERTO=1 o site funciona sem login, mesmo com GITHUB_TOKEN."""
+    return ligado("ACESSO_ABERTO")
+
+
+def repositorio_autorizado(url_pr):
+    """Com o acesso aberto, só estes repositórios recebem comentários do token.
+    REPOS_COMENTARIO aceita donos ("gi-a-dias") ou repositórios ("dono/repo"),
+    separados por vírgula. Padrão: a conta da equipe."""
+    autorizados = {
+        item.strip().strip("/").lower()
+        for item in (os.getenv("REPOS_COMENTARIO") or "gi-a-dias").split(",")
+        if item.strip()
+    }
+    partes = urlparse(url_pr).path.strip("/").lower().split("/")
+
+    if len(partes) < 2:
+        return False
+
+    dono, repositorio = partes[0], partes[1]
+    return dono in autorizados or f"{dono}/{repositorio}" in autorizados
 
 
 def arquivo_frontend(caminho):
@@ -256,7 +284,7 @@ def rota_publica(request):
 
 @app.middleware("http")
 async def verificar_acesso(request: Request, call_next):
-    if request.method == "OPTIONS" or rota_publica(request):
+    if request.method == "OPTIONS" or rota_publica(request) or acesso_aberto():
         return await call_next(request)
 
     senha = os.getenv("REVIEW_ACCESS_KEY", "").strip()
@@ -477,6 +505,13 @@ def comentar(identificador: str):
 
     pr = relatorio["pr"]
 
+    if acesso_aberto() and not repositorio_autorizado(pr["url"]):
+        return erro(
+            "Sem login, só é possível comentar nos repositórios autorizados "
+            "(REPOS_COMENTARIO).",
+            403,
+        )
+
     try:
         texto = relatorio["markdown"]
 
@@ -678,6 +713,17 @@ def chamar_modulo(funcao, *args):
         return erro(str(falha), 400)
     except ErroIntegracao as falha:
         return erro(str(falha), 502)
+
+
+@app.get("/api/modulo2/repositorios")
+def modulo2_repositorios(project_id: str = ""):
+    return chamar_modulo(modulo2.listar_repositorios, project_id)
+
+
+@app.get("/api/modulo2/pull-requests")
+def modulo2_pull_requests(project_id: str = "", abertos: bool = False):
+    """PRs sincronizados pelo Módulo 2, com o link pronto para /api/analisar."""
+    return chamar_modulo(modulo2.listar_pull_requests, project_id, abertos)
 
 
 @app.get("/api/modulo3/projetos")

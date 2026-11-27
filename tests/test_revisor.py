@@ -21,6 +21,8 @@ configuracao = patch.dict(os.environ, {
     "NOTIFICACOES_KEY": "",
     "NOTIFICACOES_PROJECT_ID": "",
     "NOTIFICACOES_URL": "",
+    "ACESSO_ABERTO": "",
+    "REPOS_COMENTARIO": "",
 })
 configuracao.start()
 from app import app  # noqa: E402  (precisa vir depois de configurar o ambiente de teste)
@@ -140,6 +142,39 @@ class RevisorTest(unittest.TestCase):
         self.assertEqual(repetida.status_code, 200)
         self.assertEqual(repetida.json(), resposta.json())
         github.assert_not_called()
+
+    @patch.dict(os.environ, {"GITHUB_TOKEN": "token", "ACESSO_ABERTO": "1"})
+    @patch("github_pr.github")
+    def test_acesso_aberto_dispensa_login_e_restringe_comentarios(self, github):
+        # Sem senha e com token: não bloqueia, porque o acesso aberto foi pedido.
+        self.assertEqual(self.cliente.get("/api/historico").status_code, 200)
+
+        # PR de um repositório de terceiros: analisa, mas não comenta.
+        github.side_effect = self.respostas_pr()
+        analise = self.cliente.post("/api/analisar", json={"pr_url": PR_URL})
+        self.assertEqual(analise.status_code, 201)
+        github.reset_mock()
+        recusa = self.cliente.post(f"/api/revisoes/{analise.json()['id']}/comentar")
+        self.assertEqual(recusa.status_code, 403)
+        github.assert_not_called()
+
+        # PR da conta da equipe (padrão de REPOS_COMENTARIO): publica.
+        pr_equipe = "https://github.com/gi-a-dias/revisor-codigo-ia/pull/8"
+        github.side_effect = self.respostas_pr()
+        analise = self.cliente.post("/api/analisar", json={"pr_url": pr_equipe})
+        self.assertEqual(analise.status_code, 201)
+        github.side_effect = [PR, {"html_url": pr_equipe + "#review"}]
+        publicada = self.cliente.post(f"/api/revisoes/{analise.json()['id']}/comentar")
+        self.assertEqual(publicada.status_code, 201)
+
+    def test_repositorios_autorizados_para_comentar(self):
+        from app import repositorio_autorizado
+
+        with patch.dict(os.environ, {"REPOS_COMENTARIO": "gi-a-dias, SophiaBetoni/revisor_codigo_ia"}):
+            self.assertTrue(repositorio_autorizado("https://github.com/GI-A-DIAS/qualquer/pull/1"))
+            self.assertTrue(repositorio_autorizado("https://github.com/sophiabetoni/revisor_codigo_ia/pull/2"))
+            self.assertFalse(repositorio_autorizado("https://github.com/sophiabetoni/outro/pull/2"))
+            self.assertFalse(repositorio_autorizado("https://github.com/owner/repo/pull/1"))
 
     @patch.dict(os.environ, {"GITHUB_TOKEN": "token", "REVIEW_ACCESS_KEY": "senha"})
     @patch("github_pr.github")
