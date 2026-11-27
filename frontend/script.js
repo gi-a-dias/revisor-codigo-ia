@@ -135,10 +135,42 @@ async function api(url, dados) {
   return resultado;
 }
 
+// Integração com o Módulo 2 (GitHub Sync): lista os PRs que eles já sincronizaram.
+let prsModulo2Carregados = false;
+
+async function carregarPrsModulo2() {
+  const lista = elemento("pr-modulo2");
+  const status = elemento("pr-modulo2-status");
+  prsModulo2Carregados = true;
+
+  try {
+    const prs = (await api("/api/modulo2/pull-requests")).filter((pr) => pr.url);
+    lista.replaceChildren(new Option(
+      prs.length ? `Escolha um PR (${prs.length})` : "Nenhum PR sincronizado", ""
+    ));
+    for (const pr of prs) {
+      const estado = pr.estado === "open" ? "aberto" : pr.estado;
+      lista.append(new Option(`${pr.repositorio} #${pr.numero} · ${pr.titulo || "sem título"} (${estado})`, pr.url));
+    }
+    lista.disabled = !prs.length;
+    status.textContent = "Escolha um PR ou cole o link abaixo.";
+  } catch (falha) {
+    lista.replaceChildren(new Option("Módulo 2 indisponível", ""));
+    lista.disabled = true;
+    status.textContent = `${falha.message} Cole o link do PR abaixo.`;
+    prsModulo2Carregados = false;  // tenta de novo na próxima vez
+  }
+}
+
+elemento("pr-modulo2").addEventListener("change", () => {
+  if (elemento("pr-modulo2").value) elemento("pr-url").value = elemento("pr-modulo2").value;
+});
+
 elemento("origem").addEventListener("change", () => {
   const github = elemento("origem").value === "github";
   elemento("entrada-codigo").hidden = github;
   elemento("entrada-github").hidden = !github;
+  if (github && !prsModulo2Carregados) carregarPrsModulo2();
 });
 
 elemento("exemplo").addEventListener("click", () => {

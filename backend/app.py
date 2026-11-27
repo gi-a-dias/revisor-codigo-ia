@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from analisador import REGRAS, analisar
 from gemini import consultar_ia
+import modulo2
 import modulo3
 import modulo5
 from github_pr import ErroIntegracao, carregar_pr, obter_sha, publicar_revisao
@@ -712,6 +713,17 @@ def chamar_modulo(funcao, *args):
         return erro(str(falha), 400)
     except ErroIntegracao as falha:
         return erro(str(falha), 502)
+
+
+@app.get("/api/modulo2/repositorios")
+def modulo2_repositorios(project_id: str = ""):
+    return chamar_modulo(modulo2.listar_repositorios, project_id)
+
+
+@app.get("/api/modulo2/pull-requests")
+def modulo2_pull_requests(project_id: str = "", abertos: bool = False):
+    """PRs sincronizados pelo Módulo 2, com o link pronto para /api/analisar."""
+    return chamar_modulo(modulo2.listar_pull_requests, project_id, abertos)
 
 
 @app.get("/api/modulo3/projetos")
