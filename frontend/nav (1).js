@@ -17,7 +17,7 @@
     { n: 3, icone: "▤", nome: "Artefatos", url: "https://modulo3-fhgjdpa6d5bbfvff.canadacentral-01.azurewebsites.net/app/" },
     { n: 4, icone: "⚙", nome: "Code Review", url: "https://revisor-codigo-ia-gio-ach9dbg3g9ekazf3.chilecentral-01.azurewebsites.net/" },
     { n: 5, icone: "★", nome: "Curadoria", url: "https://frontmodulo5-ecaqg8fghzhyeuh2.brazilsouth-01.azurewebsites.net/" },
-    { n: 6, icone: "✉", nome: "Notificações", url: null },
+    { n: 6, icone: "✉", nome: "Notificações", url: "https://software6-web-eefaf6f8aqe0e8bz.canadacentral-01.azurewebsites.net/" },
     { n: 7, icone: "✦", nome: "MackAI", url: "https://mackai-conversas.calmfield-d7c6c49f.brazilsouth.azurecontainerapps.io/" },
   ];
 
