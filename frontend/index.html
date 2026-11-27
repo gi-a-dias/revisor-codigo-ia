@@ -15,6 +15,12 @@
   <script defer src="nav.js"></script>
   <script src="config.js"></script>
   <script defer src="script.js"></script>
+  <script>
+    // O JSON mora na API; em desenvolvimento (front na porta 3000) ela fica em outro endereço.
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("link-json").href = (window.API_URL || "") + "/api/dashboard/metricas";
+    });
+  </script>
 </head>
 
 <body>
@@ -35,6 +41,10 @@
       <h1>Uma segunda leitura do seu código.</h1>
       <p>Encontre riscos, revise boas práticas e confira a arquitetura
         antes do próximo merge.</p>
+      <div class="atalhos">
+        <a class="botao-link principal" href="graficos.html" target="_blank" rel="noopener">▥ Ver gráficos</a>
+        <a class="botao-link secundario" id="link-json" href="/api/dashboard/metricas" target="_blank" rel="noopener">{ } Dados em JSON</a>
+      </div>
     </section>
 
     <section class="metricas">
